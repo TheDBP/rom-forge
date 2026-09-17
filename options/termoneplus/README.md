@@ -20,45 +20,29 @@ build, and its 114 MB userland duplicates what the `linux` chroot already provid
 ## Shape
 
 ```
-patches/<branch>/vendor/lineage/   prebuilts/termoneplus module + JNI modules + guarded PRODUCT_PACKAGES
-fetch.sh                           pulls the APK into vendor/lineage/prebuilts/termoneplus, unpacks lib/arm64-v8a/
-require.sh                         APK + libraries present; on 20.0, the build/make presigned-warn patch applied
-post-build.sh                      shipped APK byte-identical to the fetched one, libterm-system.so beside it
+patches/<branch>/vendor/lineage/   guarded PRODUCT_PACKAGES in config/common.mk; prebuilts/termoneplus/
+                                   module (20.0: Android.mk; 22.2+: jni/Android.mk, Android.bp is fetched)
+fetch.sh                           pulls the APK into vendor/lineage/prebuilts/termoneplus at sync time,
+                                   unpacks lib/arm64-v8a/ beside it, on 22.2+ writes Android.bp
+require.sh                         APK present and named in the module file; on 20.0, the build/make
+                                   presigned-warn patch applied
+post-build.sh                      shipped APK byte-identical to the fetched one; every unpacked library beside it
 ```
 
-No device-tree involvement: the module lives in `vendor/lineage` on every branch, so the option is
-the whole feature. Same shape as `k9`, plus the native libraries.
-
-## Native libraries ship beside the APK
-
-The terminal's pty handling is JNI (`libterm-system.so` and three helpers). PackageManager never
-extracts native libraries for a bundled system app and the linker cannot dlopen a compressed zip
-entry, so without the unpacked copy beside the APK every launch dies in `UnsatisfiedLinkError`.
-Same mechanism as `firefox`:
-
-- **22.2 / 23.2** -- `android_app_import { preprocessed: true, skip_preprocessed_apk_checks: true }`
-  for the APK; `jni/Android.mk` installs each `lib/arm64-v8a/*.so` as `app/TermOnePlus/lib/arm64/`,
-  one Make module per library, added to `PRODUCT_PACKAGES` from the same wildcard in `common.mk`.
-- **20.0** -- `BUILD_PREBUILT` with `LOCAL_SDK_VERSION := current` (verbatim copy) and
-  `LOCAL_PREBUILT_JNI_LIBS`. The dex is Deflated, so the copy path's compression check needs the
-  `build/make` warn-instead-of-fail patch ether-20.0 carries; `require.sh` refuses to build
-  without it.
-
-The 20.0 module sets `LOCAL_ENFORCE_USES_LIBRARIES := false` rather than mirroring the manifest's
-optional `uses-library` entries (the 570 build declares two); the check only guards dexpreopt,
-which is off for the module.
+Same shape as `k9` (and so `nextcloud`); those READMEs explain the fetch, the per-branch module
+choice and the native-library rule. The terminal's pty handling is JNI (`libterm-system.so` and
+three helpers), and every release so far packs them compressed, so the fetcher unpacks them and the
+module installs them as `app/TermOnePlus/lib/arm64/` -- without that every launch dies in
+`UnsatisfiedLinkError`.
 
 ## No 21.0 patches
 
-Same as `k9`: nothing has been built on 21.0 yet. Enabling `termoneplus` there fetches the APK but
-adds no module, so the build compiles and then fails in `post-build.sh` (no `TermOnePlus.apk` in the
+Nothing has been built on 21.0 yet. Enabling `termoneplus` there fetches the APK but adds no
+module, so the build compiles and then fails in `post-build.sh` (no `TermOnePlus.apk` in the
 image). Add a `lineage-21.0` patch first (the 20.0 one is the starting point).
 
 ## Updating
 
-`prebuilt/fetch-termoneplus.sh` pins URL + sha256 to one F-Droid versionCode. To move:
-`curl -s https://f-droid.org/api/v1/packages/com.termoneplus` for `suggestedVersionCode`, download
-`https://f-droid.org/repo/com.termoneplus_<code>.apk`, `sha256sum` it, update both constants.
-Re-check `unzip -l` for
-the `lib/arm64-v8a/*.so` set -- the wildcards pick those up, the `require.sh`/`post-build.sh` checks
-only name `libterm-system.so`.
+Nothing to bump for a new release -- the next build fetches it. Change
+`prebuilt/fetch-termoneplus.sh` only when the author rotates the signing key (confirm with
+upstream first).

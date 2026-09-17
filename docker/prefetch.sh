@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # prefetch.sh — download the build's network inputs into /dl, IN-CONTAINER, so they overlap `repo
-# sync` instead of running serially after it. Consumed later by the extractors (from /dl) and the
-# Firefox verify step. Each *_URL is optional, but a set-but-FAILED download is fatal: a missing
+# sync` instead of running serially after it. Consumed later by the extractors (from /dl). Each
+# *_URL is optional, but a set-but-FAILED download is fatal: a missing
 # input must stop the build, never silently degrade the ROM.
 set -euo pipefail
 mkdir -p /dl
@@ -38,7 +38,6 @@ dl() {  # $1=url  $2=dest-name  $3=label
 
 [ -n "${STOCK_DL_URL:-}" ]   && dl "$STOCK_DL_URL"   "stock.zip"   "stock ROM"
 [ -n "${GAPPS_DL_URL:-}" ]   && dl "$GAPPS_DL_URL"   "gapps.zip"   "NikGapps"
-[ -n "${FIREFOX_DL_URL:-}" ] && dl "$FIREFOX_DL_URL" "Firefox.apk" "Firefox (Fennec)"
 # Magisk is tiny and caches into /repo/forge/prebuilt/; prefetch it too so nothing is left for later.
 [ -f /repo/forge/prebuilt/fetch-magisk.sh ] && bash /repo/forge/prebuilt/fetch-magisk.sh || true
 echo ">> prefetch done."

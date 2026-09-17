@@ -33,12 +33,13 @@ post-build.sh                      every shipped APK byte-identical to the fetch
                                    installed beside it
 ```
 
-Same shape as `k9`, times eight, with one difference: **the version is not pinned.** `fetch.sh`
-takes the build F-Droid currently suggests for each package and accepts it only if its signing
-certificate matches the sha256 pinned in `prebuilt/fetch-nextcloud.sh` (`apksigner verify`, whole
-file). The image carries the apps as they are on the day it is built. `FDROID_PINS="pkg=versionCode
-…"` holds any of them to one build. If F-Droid is unreachable, or names a build it has already
-moved, a cached copy that verifies is used with a warning.
+The shape every fetched-app option shares (`k9`, `kdeconnect`, `termoneplus`, `firefox`,
+`fdroid`), times eight. **The version is not pinned.** `fetch.sh` takes the build F-Droid currently
+suggests for each package and accepts it only if its signing certificate matches the sha256 pinned
+in `prebuilt/fetch-nextcloud.sh` (`apksigner verify`, whole file). The image carries the apps as
+they are on the day it is built. `FDROID_PINS="pkg=versionCode …"` holds any of them to one build.
+If F-Droid is unreachable, or names a build it has already moved, a cached copy that verifies is
+used with a warning.
 
 `PRODUCT_PACKAGES` is one `$(foreach)` guarded per APK (naming a module with no APK fails `lunch`);
 `require.sh` refuses to build with the option on and any APK absent, so the guard cannot turn into a
@@ -71,7 +72,7 @@ check (`fdroid_apk_libs_loadable` in `prebuilt/lib-fdroid.sh`) and, for the ones
 `lib/arm64-v8a/*.so` to `prebuilts/nextcloud/<App>/lib/arm64-v8a/`; the module installs those as
 `<app>/lib/arm64/*.so` — `LOCAL_PREBUILT_JNI_LIBS` on 20.0, one `BUILD_PREBUILT` module per library
 from `jni/Android.mk` on 22.2+ (`android_app_import` has no such property), both from a wildcard so
-the patches carry no per-app knowledge. Same rule as `firefox` and `termoneplus`.
+the patches carry no per-app knowledge.
 
 The `<uses-library>` check is off on every branch (`LOCAL_ENFORCE_USES_LIBRARIES := false` /
 `enforce_uses_libs: false`): the manifests move with each fetch, so a mirrored list would break the

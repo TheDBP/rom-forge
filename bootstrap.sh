@@ -238,14 +238,13 @@ nikgapps_url_for_version() {
   esac
 }
 
-# The pinned Fennec build lives in one place: fetch-firefox.sh. Read it from there for the prefetch.
-DEFAULT_FIREFOX_URL="$(sed -nE 's/^FIREFOX_URL="\$\{FIREFOX_URL:-(https?:[^}]+)\}"$/\1/p' "$FORGE/prebuilt/fetch-firefox.sh")"
-[ -n "$DEFAULT_FIREFOX_URL" ] || { echo "!! cannot read FIREFOX_URL from forge/prebuilt/fetch-firefox.sh"; exit 1; }
-# Which sync-time fetches this build needs. Both are options now, so this is just membership of
-# the resolved set -- no second table to keep in step with the first.
-WANT_OEM=false; WANT_GAPPS=false; WANT_FIREFOX=false
+# Which sync-time downloads this build needs. Both are options, so this is just membership of the
+# resolved set -- no second table to keep in step with the first. The app options (firefox, fdroid,
+# k9, ...) fetch their own APKs from apply-overlay, after the tree exists: which build to take is
+# resolved against F-Droid at that point, so there is nothing to prefetch.
+WANT_OEM=false; WANT_GAPPS=false
 for _o in $BUILD_OPTIONS; do
-  case "$_o" in oem) WANT_OEM=true ;; gapps) WANT_GAPPS=true ;; firefox) WANT_FIREFOX=true ;; esac
+  case "$_o" in oem) WANT_OEM=true ;; gapps) WANT_GAPPS=true ;; esac
 done
 # OEM_ASSET_PACK names which manufacturer asset pack to reclaim, not a yes/no. Unset or
 # "none" means this build bakes no OEM assets. "nextbit-robin" is the only pack that exists
@@ -275,7 +274,7 @@ if [ "$WANT_OEM" = true ]; then
   fi
 fi
 
-GAPPS_DL_URL=""; FIREFOX_DL_URL=""
+GAPPS_DL_URL=""
 if [ "$WANT_GAPPS" = true ]; then
   if [ -n "${GAPPS_ZIP:-}" ]; then
     [ -f "$GAPPS_ZIP" ] || { echo "!! GAPPS_ZIP=$GAPPS_ZIP does not exist" >&2; exit 1; }
@@ -306,11 +305,6 @@ if [ "$WANT_GAPPS" = true ]; then
     fi
   fi
 fi
-# Outside the GApps block on purpose: firefox is its own option and a build can have it without
-# GApps. Nesting this meant a non-GApps build never prefetched Firefox -- the option's fetch.sh
-# downloaded it later instead, serially, which worked but wasted the parallel prefetch.
-[ "$WANT_FIREFOX" = true ] && FIREFOX_DL_URL="${FIREFOX_URL:-$DEFAULT_FIREFOX_URL}"
-
 # ---- 3. reset patched projects (feature targets + device patches), then prefetch + sync ----
 # Compute the full set of projects our commits touch so repo sync can check them out clean.
 RESET_PROJECTS="${PATCHED_PROJECTS:-}"
@@ -334,7 +328,7 @@ LOG_TAG=reset "$AOSP" bash -lc "
 DL="$BUILD_ROOT/dl"; mkdir -p "$DL"
 echo ">> [3/5] prefetch downloads in background (overlapping sync) -> $DL"
 ( DL_DIR="$DL" CONTAINER=aosp-${DEVICE_SLUG}-prefetch LOG_TAG=prefetch "$AOSP" bash -lc \
-    "STOCK_DL_URL='$STOCK_DL_URL' GAPPS_DL_URL='$GAPPS_DL_URL' FIREFOX_DL_URL='$FIREFOX_DL_URL' /repo/forge/docker/prefetch.sh" ) &
+    "STOCK_DL_URL='$STOCK_DL_URL' GAPPS_DL_URL='$GAPPS_DL_URL' /repo/forge/docker/prefetch.sh" ) &
 PREFETCH_PID=$!
 
 echo ">> [3/5] repo sync — hours + ~100GB the first time (progress in logs/sync.log)"
@@ -372,14 +366,13 @@ if [ "$WANT_OEM" = true ]; then
   fi
 fi
 if [ "$WANT_GAPPS" = true ]; then
-  echo ">> [4c] extracting Google apps$([ "$WANT_FIREFOX" = true ] && echo " + installing Firefox") (concurrent)"
-  FF_CMD=""; [ "$WANT_FIREFOX" = true ] && FF_CMD=" && FIREFOX_SRC=/dl/Firefox.apk /repo/forge/prebuilt/fetch-firefox.sh /aosp"
+  echo ">> [4c] extracting Google apps (concurrent)"
   if [ -n "${GAPPS_ZIP:-}" ]; then
     ( GAPPS_DIR="$(cd "$(dirname "$GAPPS_ZIP")" && pwd)" DL_DIR="$DL" CONTAINER=aosp-${DEVICE_SLUG}-gapps LOG_TAG=gapps "$AOSP" bash -lc \
-        "/repo/forge/tools/extract-gapps-apps.sh '/gapps/$(basename "$GAPPS_ZIP")' /aosp$FF_CMD" ) & EXTRACT_PIDS+=($!)
+        "/repo/forge/tools/extract-gapps-apps.sh '/gapps/$(basename "$GAPPS_ZIP")' /aosp" ) & EXTRACT_PIDS+=($!)
   else
     ( DL_DIR="$DL" CONTAINER=aosp-${DEVICE_SLUG}-gapps LOG_TAG=gapps "$AOSP" bash -lc \
-        "/repo/forge/tools/extract-gapps-apps.sh '/dl/gapps.zip' /aosp$FF_CMD" ) & EXTRACT_PIDS+=($!)
+        "/repo/forge/tools/extract-gapps-apps.sh '/dl/gapps.zip' /aosp" ) & EXTRACT_PIDS+=($!)
   fi
 fi
 if [ "${#EXTRACT_PIDS[@]}" -gt 0 ]; then

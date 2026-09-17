@@ -10,7 +10,7 @@
 #     release) -> lib/arm64-v8a/*.so unpacked to <App>/lib/arm64-v8a/ beside it, which the branch's
 #     module installs as app/<App>/lib/arm64/. PackageManager does not extract native libraries for
 #     a bundled app, so without this the app dies at launch in UnsatisfiedLinkError.
-#   - on Soong branches (22.2+; anything whose patch ships no Android.mk here) the module file is
+#   - on Soong branches (22.2+; the patch's .gitignore lists /Android.bp) the module file is
 #     WRITTEN here, Android.bp, gitignored: skip_preprocessed_apk_checks has to be set on exactly
 #     the APKs Soong's check fails, and Soong refuses it on one that passes, so a static file cannot
 #     be right across releases. 20.0's Android.mk needs no per-app knowledge (a wildcard on the
@@ -44,52 +44,22 @@ fail=0
 unpacked=""
 while read -r mod pkg signer; do
   [ -n "$mod" ] || continue
-  fdroid_fetch_latest "$pkg" "$DEST/$mod.apk" "$signer" "$mod" || { fail=1; continue; }
-  # Re-derived on every run from the APK that is there, so a release that changes its packaging
-  # changes the wiring with it, in either direction.
-  rm -rf "${DEST:?}/$mod"
-  loadable="$(fdroid_apk_libs_loadable "$DEST/$mod.apk")" || { fail=1; continue; }
-  if [ "$loadable" = no ]; then
-    mkdir -p "$DEST/$mod"
-    unzip -q -o "$DEST/$mod.apk" 'lib/arm64-v8a/*.so' -d "$DEST/$mod" || { echo "!! $mod: could not unpack native libraries" >&2; fail=1; continue; }
-    echo "   $mod: native libraries not loadable from the APK; unpacked $(ls "$DEST/$mod/lib/arm64-v8a" | wc -l) beside it"
-    unpacked="$unpacked $mod"
-  fi
+  fdroid_stage "$pkg" "$DEST/$mod.apk" "$signer" "$mod" "$DEST/$mod" || { fail=1; continue; }
+  [ "$FDROID_UNPACKED" = yes ] && unpacked="$unpacked $mod"
 done <<EOF
 $(printf '%s\n' "$NEXTCLOUD_APPS" | awk 'NF==3')
 EOF
 [ "$fail" = 0 ] || { echo "!! nextcloud: one or more apps failed to fetch — see above" >&2; exit 1; }
 
-if [ ! -f "$DEST/Android.mk" ]; then
-  {
-    echo "// Written by forge/prebuilt/fetch-nextcloud.sh on every fetch from the APKs it fetched;"
-    echo "// gitignored, not edited by hand. Native libraries for the apps marked below are unpacked"
-    echo "// beside the APK and installed by jni/Android.mk."
-    echo "//"
-    echo "// preprocessed: true installs each APK byte for byte. Any rewrite (uncompressing libs or dex,"
-    echo "// re-aligning) invalidates the whole-file APK Signature Scheme v2 signature, and PackageManager"
-    echo "// then rejects the package at boot scan without logging, so the build succeeds and the app is"
-    echo "// absent. skip_preprocessed_apk_checks goes on exactly the APKs whose native libraries are"
-    echo "// compressed or unaligned: Soong fails the build if it is set on one that passes the check."
-    echo "// enforce_uses_libs: false -- the build otherwise refuses any APK whose manifest <uses-library>"
-    echo "// tags it was not told about, and those change with releases."
-    while read -r mod pkg signer; do
-      [ -n "$mod" ] || continue
-      echo
-      echo "// $pkg"
-      echo "android_app_import {"
-      echo "    name: \"$mod\","
-      echo "    apk: \"$mod.apk\","
-      echo "    presigned: true,"
-      echo "    preprocessed: true,"
-      case " $unpacked " in *" $mod "*) echo "    skip_preprocessed_apk_checks: true, // libraries unpacked to $mod/lib/arm64-v8a/" ;; esac
-      echo "    product_specific: true,"
-      echo "    enforce_uses_libs: false,"
-      echo "}"
-    done <<EOF
+if fdroid_bp_wanted "$DEST"; then
+  fdroid_bp_begin "$DEST/Android.bp" fetch-nextcloud.sh
+  while read -r mod pkg signer; do
+    [ -n "$mod" ] || continue
+    case " $unpacked " in *" $mod "*) u=yes ;; *) u=no ;; esac
+    fdroid_bp_module "$DEST/Android.bp" "$mod" "$mod.apk" "$pkg" "$u"
+  done <<EOF
 $(printf '%s\n' "$NEXTCLOUD_APPS" | awk 'NF==3')
 EOF
-  } > "$DEST/Android.bp"
   echo "   nextcloud: wrote $DEST/Android.bp (${unpacked:- no app} with unpacked libraries)"
 fi
 echo "   nextcloud: $(nextcloud_modules | wc -l) apps in $DEST ($(du -sh "$DEST" | cut -f1))"

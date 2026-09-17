@@ -1,6 +1,7 @@
 #!/bin/bash
 # fetch.sh -- pull the K-9 Mail APK into vendor/lineage/prebuilts/k9, where this option's patch
-# builds it from. One destination only: unlike firefox/fdroid there is no legacy device-tree module.
+# builds it from: the build F-Droid suggests, verified against K-9's signing certificate
+# (prebuilt/fetch-k9.sh; FDROID_PINS="com.fsck.k9=<versionCode>" pins one).
 #
 # Runs at sync time. It has to: PRODUCT_PACKAGES resolves at product-config time, and the module is
 # guarded on the APK existing, so a missing APK means no K-9 and no error -- which is why

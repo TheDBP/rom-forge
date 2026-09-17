@@ -1,57 +1,34 @@
 #!/usr/bin/env bash
-# fetch-firefox.sh — download the Fennec F-Droid APK (Firefox, MPL, F-Droid-signed) for the
-# WITH_GAPPS browser swap. Runs in-container (network + aapt2 from the tree). Places the APK straight
-# into the device tree's firefox/ dir. Verified by package name, arm64 ABI and pinned sha256;
-# override FIREFOX_URL + FIREFOX_SHA256 together to pin a different build.
+# fetch-firefox.sh — download Firefox (Fennec F-Droid, MPL) for the firefox option: the build
+# F-Droid currently suggests, verified against the pinned signing certificate (see lib-fdroid.sh).
+# Runs in-container (network + aapt2/JDK/zipalign from the tree).
 #   ./fetch-firefox.sh [AOSP_ROOT]
-# If FIREFOX_SRC points at an already-downloaded APK (e.g. staged by the prefetch phase), it is
-# verified + installed instead of re-downloading — this is the fetch/verify split that lets the
-# download overlap `repo sync` (verify needs the tree's aapt2, so it stays here).
+# FDROID_PINS="org.mozilla.fennec_fdroid=1550020" holds it to one build.
+#
+# F-Droid publishes Fennec per ABI under one package (three versionCodes per release); the suggested
+# build, the highest code, is the arm64 one. If that ever changes, verification fails on "not an
+# arm64 build" and the fetch stops rather than shipping the wrong ABI.
+#
+# The APK ships byte for byte, so what Mozilla packed decides how it is wired, per fetch: native
+# libraries compressed or unaligned in the APK (every release so far: extractNativeLibs=true) ->
+# lib/arm64-v8a/*.so unpacked to lib/arm64-v8a/ beside it for the module to install; on Soong
+# branches (the patch ships no Android.mk) the module file is written here, Android.bp, gitignored,
+# with skip_preprocessed_apk_checks matching. The option's post-patch.sh copies APK and libraries
+# on to a device tree that carries its own Firefox module (ether 20.0).
 set -euo pipefail
 
-AOSP="${1:-/aosp}"
-SRC="${FIREFOX_SRC:-}"
-_SELF_REPO="$(cd "$(dirname "$0")/../.." && pwd)"; [ -f "$_SELF_REPO/device.conf" ] && source "$_SELF_REPO/device.conf"
-# FEATURE_DEST (set by the apps/firefox feature) overrides the legacy device-tree path.
-DEST="${FEATURE_DEST:-$AOSP/device/${DEVICE:?device.conf missing or DEVICE unset}/firefox}"
-OUT="$DEST/Firefox.apk"
+AOSP="${1:-/aosp}"; export AOSP
+DEST="${FEATURE_DEST:-$AOSP/vendor/lineage/prebuilts/firefox}"
+. "$(dirname "${BASH_SOURCE[0]}")/lib-fdroid.sh"
+
 PKG="org.mozilla.fennec_fdroid"
-# Fennec F-Droid 155.0.0 (versionCode 1550020), arm64-v8a. Override with FIREFOX_URL + FIREFOX_SHA256.
-# bootstrap.sh greps the URL line for the prefetch, so keep it a single literal.
-FIREFOX_URL="${FIREFOX_URL:-https://f-droid.org/repo/org.mozilla.fennec_fdroid_1550020.apk}"
-FIREFOX_SHA256="${FIREFOX_SHA256:-f76bea68ef7b1fed0bfc7d99718551476da830914ae4e173fabcd8d2a6532944}"
-AAPT2="$(command -v aapt2 || echo "$AOSP/prebuilts/sdk/tools/linux/bin/aapt2")"
+# Fennec F-Droid's own key (F-Droid's build of Firefox, signed by its maintainer, not F-Droid's
+# key). Read on 2026-09-17.
+SIGNER="06665358efd8ba05be236a47a12cb0958d7d75dd939d77c2b31f5398537ebdc5"
 
-mkdir -p "$DEST"
-verify() {  # $1 = apk
-  [ -x "$AAPT2" ] || { echo "!! aapt2 not found — cannot verify Firefox"; return 1; }
-  [ "$("$AAPT2" dump packagename "$1" 2>/dev/null)" = "$PKG" ] || { echo "!! wrong package"; return 1; }
-  # capture-then-count: `grep -q` exits early -> unzip SIGPIPEs -> pipefail fails a VALID apk.
-  [ "$(unzip -l "$1" 2>/dev/null | grep -c 'lib/arm64-v8a/' || true)" -gt 0 ] || { echo "!! not an arm64 build"; return 1; }
-  echo "$FIREFOX_SHA256  $1" | sha256sum -c - >/dev/null 2>&1 || { echo "!! sha mismatch"; return 1; }
-  return 0
-}
-
-# PackageManager never extracts native libraries for a bundled system app
-# (PackageAbiHelperImpl.shouldExtractLibs) and the linker cannot dlopen a compressed zip entry, so
-# unpack lib/arm64-v8a/ beside the APK for the module to install as <app>/lib/arm64/*.so.
-unpack_libs() {
-  rm -rf "$DEST/lib"
-  unzip -q -o "$1" 'lib/arm64-v8a/*.so' -d "$DEST" || { echo "!! could not unpack native libraries"; return 1; }
-  echo "   unpacked: $(ls "$DEST/lib/arm64-v8a" | wc -l) native libraries -> lib/arm64-v8a/"
-}
-
-# Cached only if it is the pinned build; a prefetched file that differs always wins.
-if [ -f "$OUT" ] && verify "$OUT" >/dev/null 2>&1 && { [ -z "$SRC" ] || cmp -s "$SRC" "$OUT"; }; then
-  echo "   ok (cached): Firefox.apk"; unpack_libs "$OUT"; exit $?
+fdroid_stage "$PKG" "$DEST/Firefox.apk" "$SIGNER" Firefox "$DEST" || { echo "!! firefox: fetch failed — see above" >&2; exit 1; }
+if fdroid_bp_wanted "$DEST"; then
+  fdroid_bp_begin "$DEST/Android.bp" fetch-firefox.sh
+  fdroid_bp_module "$DEST/Android.bp" Firefox Firefox.apk "$PKG" "$FDROID_UNPACKED" 'overrides: ["Jelly"],'
+  echo "   firefox: wrote $DEST/Android.bp"
 fi
-if [ -n "$SRC" ] && [ -f "$SRC" ]; then
-  echo ">> using prefetched Firefox APK ($SRC)"
-  cp -f "$SRC" "$OUT"
-else
-  echo ">> downloading Firefox (Fennec F-Droid, arm64) — ~120 MB"
-  curl -fSL -o "$OUT" "$FIREFOX_URL"
-fi
-verify "$OUT" || { echo "!! Firefox verification failed — refusing to use it"; rm -f "$OUT"; exit 1; }
-echo "   verified: Firefox.apk ($PKG, arm64)"
-unpack_libs "$OUT"

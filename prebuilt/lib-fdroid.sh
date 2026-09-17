@@ -7,7 +7,8 @@
 # Resolves PKG's suggestedVersionCode from the F-Droid API, downloads that APK to OUT unless OUT
 # already is that version, and accepts it only if
 #   - aapt2 reports the package name PKG,
-#   - it carries arm64-v8a native code (an armeabi-only build would install and then crash),
+#   - if it carries native code at all, some of it is arm64-v8a (an armeabi-only build would
+#     install and then crash; a pure-Java build is fine),
 #   - apksigner verifies it and the first signer certificate's sha256 is SIGNER_SHA256.
 # The signer pin is what makes "latest" safe: the key is the one thing that does not change between
 # releases, and it is checked over the whole file (v2/v3 signature), so a tampered or truncated
@@ -19,6 +20,22 @@
 # Offline: if the API cannot be reached but OUT exists and verifies, it is used with a warning; a
 # missing or bad OUT is an error. Runs in-container: needs curl, unzip, and the tree's aapt2, JDK
 # and apksigner.jar (AOSP in $AOSP, default /aosp).
+#
+# The fetchers build on it with:
+#
+#   fdroid_stage PKG APK SIGNER_SHA256 LABEL LIBDIR
+#       fetch_latest, then classify the APK (fdroid_apk_libs_loadable) and, if its native libraries
+#       cannot be loaded out of the archive, unpack lib/arm64-v8a/*.so to LIBDIR/lib/arm64-v8a/ for
+#       the module to install beside the APK. Sets FDROID_UNPACKED=yes|no.
+#   fdroid_bp_wanted DIR
+#       true when DIR/.gitignore lists /Android.bp: the branch's patch ships no module file and the
+#       fetcher writes it. (20.0 patches ship Android.mk and no such line; a branch with no patch
+#       for the option has no .gitignore, so nothing is written where nothing is built.)
+#   fdroid_bp_begin FILE WRITER; fdroid_bp_module FILE NAME APK PKG UNPACKED [EXTRA_PROPERTY...]
+#       write the Soong module file: header, then one android_app_import per call.
+#       skip_preprocessed_apk_checks is set exactly when UNPACKED=yes, which is what Soong's check
+#       demands (it fails the build if the flag is set on an APK that passes, or missing on one that
+#       does not).
 set -o pipefail
 
 FDROID_API="${FDROID_API:-https://f-droid.org/api/v1/packages}"
@@ -84,7 +101,9 @@ _fdroid_verify() {
   [ -x "$aapt2" ] || { echo "!! aapt2 not found — cannot verify $apk" >&2; return 1; }
   [ "$("$aapt2" dump packagename "$apk" 2>/dev/null)" = "$pkg" ] || { echo "!! $apk: wrong package (want $pkg)" >&2; return 1; }
   # capture-then-count: `grep -q` exits early -> unzip SIGPIPEs -> pipefail fails a VALID apk.
-  [ "$(unzip -l "$apk" 2>/dev/null | grep -c 'lib/arm64-v8a/' || true)" -gt 0 ] || { echo "!! $apk: not an arm64 build" >&2; return 1; }
+  if [ "$(unzip -l "$apk" 2>/dev/null | grep -c ' lib/' || true)" -gt 0 ]; then
+    [ "$(unzip -l "$apk" 2>/dev/null | grep -c 'lib/arm64-v8a/' || true)" -gt 0 ] || { echo "!! $apk: not an arm64 build" >&2; return 1; }
+  fi
   got="$(fdroid_apk_signer "$apk")" || return 1
   [ "$got" = "$signer" ] || { echo "!! $apk: signer $got is not the pinned $signer" >&2; return 1; }
 }
@@ -138,4 +157,56 @@ fdroid_fetch_latest() {
   _fdroid_verify "$tmp" "$pkg" "$signer" || { rm -f "$tmp"; echo "!! $label: verification failed — refusing to use it" >&2; return 1; }
   mv -f "$tmp" "$out"
   echo "   verified: $label $(fdroid_apk_version_name "$out") ($want) — $pkg, arm64, signer pinned"
+}
+
+# fdroid_stage PKG APK SIGNER LABEL LIBDIR -> fetch + classify + unpack; FDROID_UNPACKED=yes|no
+fdroid_stage() {
+  local pkg="$1" apk="$2" signer="$3" label="$4" libdir="$5" loadable
+  FDROID_UNPACKED=no
+  fdroid_fetch_latest "$pkg" "$apk" "$signer" "$label" || return 1
+  # Re-derived on every run from the APK that is there, so a release that changes its packaging
+  # changes the wiring with it, in either direction.
+  rm -rf "${libdir:?}/lib"
+  loadable="$(fdroid_apk_libs_loadable "$apk")" || return 1
+  [ "$loadable" = no ] || return 0
+  mkdir -p "$libdir"
+  unzip -q -o "$apk" 'lib/arm64-v8a/*.so' -d "$libdir" || { echo "!! $label: could not unpack native libraries" >&2; return 1; }
+  echo "   $label: native libraries not loadable from the APK; unpacked $(ls "$libdir/lib/arm64-v8a" | wc -l) beside it"
+  FDROID_UNPACKED=yes
+}
+
+fdroid_bp_wanted() { grep -qx '/Android.bp' "$1/.gitignore" 2>/dev/null; }
+
+fdroid_bp_begin() {  # FILE WRITER
+  {
+    echo "// Written by forge/prebuilt/$2 on every fetch from the APKs it fetched; gitignored, not"
+    echo "// edited by hand. Native libraries for the apps marked below are unpacked beside the APK and"
+    echo "// installed by jni/Android.mk."
+    echo "//"
+    echo "// preprocessed: true installs each APK byte for byte. Any rewrite (uncompressing libs or dex,"
+    echo "// re-aligning) invalidates the whole-file APK Signature Scheme v2 signature, and PackageManager"
+    echo "// then rejects the package at boot scan without logging, so the build succeeds and the app is"
+    echo "// absent. skip_preprocessed_apk_checks goes on exactly the APKs whose native libraries are"
+    echo "// compressed or unaligned: Soong fails the build if it is set on one that passes the check."
+    echo "// enforce_uses_libs: false -- the build otherwise refuses any APK whose manifest <uses-library>"
+    echo "// tags it was not told about, and those change with releases."
+  } > "$1"
+}
+
+fdroid_bp_module() {  # FILE NAME APK PKG UNPACKED [EXTRA_PROPERTY...]
+  local file="$1" name="$2" apk="$3" pkg="$4" unpacked="$5"; shift 5
+  {
+    echo
+    echo "// $pkg"
+    echo "android_app_import {"
+    echo "    name: \"$name\","
+    echo "    apk: \"$apk\","
+    echo "    presigned: true,"
+    echo "    preprocessed: true,"
+    [ "$unpacked" = yes ] && echo "    skip_preprocessed_apk_checks: true, // libraries unpacked beside the APK"
+    echo "    product_specific: true,"
+    echo "    enforce_uses_libs: false,"
+    for p in "$@"; do echo "    $p"; done
+    echo "}"
+  } >> "$file"
 }

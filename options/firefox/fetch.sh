@@ -1,15 +1,12 @@
 #!/bin/bash
-# fetch.sh -- pull the Firefox APK into whichever prebuilt directory this branch's module reads.
+# fetch.sh -- pull the Firefox (Fennec F-Droid) APK into vendor/lineage/prebuilts/firefox and
+# unpack its native libraries beside it: the build F-Droid suggests, verified against Fennec's
+# signing certificate (prebuilt/fetch-firefox.sh; FDROID_PINS="org.mozilla.fennec_fdroid=<versionCode>"
+# pins one). ether 20.0 builds it from a device-tree module instead; post-patch.sh copies it there.
 #
-# Two destinations, because two mechanisms build it:
-#   vendor/lineage/prebuilts/firefox   this option's patch (22.2+)
-#   device/<vendor>/<codename>/firefox an older device-tree module (ether 19.1 and 20.0 have one)
-# Both consumers guard on the APK existing, so populating both is harmless and populating neither is
-# silent: PRODUCT_PACKAGES resolves at product-config time, and a module with no APK simply is not
-# built -- no error, no Firefox.
-#
-# Runs at sync time. It has to: a module that does not exist yet is not "missing later", it fails
-# lunch outright with "includes non-existent modules in PRODUCT_PACKAGES".
+# Runs at sync time. It has to: PRODUCT_PACKAGES resolves at product-config time, and the module is
+# guarded on the APK existing, so a missing APK means no Firefox and no error -- which is why
+# post-build.sh then checks the image.
 set -o pipefail
 AOSP="${1:-/aosp}"
 FEATURE_DEST="$AOSP/vendor/lineage/prebuilts/firefox" \

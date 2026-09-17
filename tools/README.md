@@ -119,10 +119,10 @@ actually fails, so they are worth knowing by name.
 | `lib/presets.sh` | resolves a preset name into an option list and a build tag. `EXTRA_OPTIONS` is unioned in here, and the tag suffix for each option it adds (`-oem`, `-nextcloud`) is derived here rather than written by hand |
 | `docker/prefetch.sh` | downloads the build's network inputs into `/dl` in-container, so they overlap `repo sync` instead of running after it. A set-but-failed download is fatal, deliberately |
 | `docker/_build_rom.sh` | runs the build inside the container and calls each enabled option's `require.sh` before and `post-build.sh` after |
-| `prebuilt/fetch-firefox.sh` | downloads the pinned Fennec F-Droid APK and verifies package name and ABI |
-| `prebuilt/fetch-fdroid.sh` | downloads the pinned, sha256-verified F-Droid client and Privileged Extension |
+| `prebuilt/lib-fdroid.sh` | the F-Droid fetch: resolves the suggested build of a package, verifies package name, ABI and the pinned signer certificate, unpacks native libraries the APK packs compressed, writes the Soong module file |
+| `prebuilt/fetch-firefox.sh`, `fetch-fdroid.sh`, `fetch-k9.sh`, `fetch-kdeconnect.sh`, `fetch-termoneplus.sh`, `fetch-nextcloud.sh` | the per-option fetchers on top of it: package, signer pin, module names |
+| `prebuilt/lib-app-checks.sh` | the `require.sh` / `post-build.sh` checks those options share: APKs present and named in the module file; shipped byte-identical, libraries installed beside |
 | `prebuilt/fetch-magisk.sh` | downloads Magisk for the `root` option's boot-image patch |
-| `prebuilt/fetch-k9.sh`, `fetch-kdeconnect.sh`, `fetch-termoneplus.sh` | download the pinned, verified APK for the `k9`, `kdeconnect` and `termoneplus` options |
 
 An option can also carry its own hooks, which `_build_rom.sh` runs by name:
 
