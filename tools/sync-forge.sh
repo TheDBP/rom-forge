@@ -3,7 +3,7 @@
 #
 #   ./forge/tools/sync-forge.sh              # sync to origin/main, pin to that commit
 #   ./forge/tools/sync-forge.sh <ref>        # sync to a tag/branch/SHA
-#   FORGE_URL=... ./forge/tools/sync-forge.sh
+#   FORGE_URL=... ./forge/tools/sync-forge.sh   # another rom-forge (a fork); remembered in FORGE_REF
 #
 # Replaces `git subtree`. Subtree linkage lives in COMMIT MESSAGES (git-subtree-dir /
 # git-subtree-split trailers), so squashing a repo's history destroys it and every squash would
@@ -29,6 +29,9 @@ trap 'rm -f "$0"' EXIT   # we are the temp copy; clean up on the way out
 ORIG="${FORGE_SYNC_ORIG:?}"
 DEVICE_REPO="$(cd "$(dirname "$ORIG")/../.." && pwd)"   # tools -> forge -> device repo root
 FORGE_DIR="$DEVICE_REPO/forge"
+# Default to wherever this forge/ came from, so a device repo synced from a fork keeps following
+# the fork; the upstream URL is only the fallback for a FORGE_REF that records none.
+FORGE_URL="${FORGE_URL:-$(sed -n 's/^url=//p' "$FORGE_DIR/FORGE_REF" 2>/dev/null | head -1)}"
 FORGE_URL="${FORGE_URL:-https://github.com/TheDBP/rom-forge.git}"
 REF="${1:-main}"
 
