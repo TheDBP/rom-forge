@@ -134,8 +134,12 @@ An app option never carries the APK; `fetch.sh` downloads it at sync time into
 verified by signer certificate (`prebuilt/lib-fdroid.sh`, `fdroid_fetch_latest`), not a pinned
 versionCode + file hash: the image should carry the app as it is on the day it is built. Pin only
 with `FDROID_PINS` on the command line, to reproduce a release or hold back a bad update.
-`nextcloud` is the model; the older fetchers (`k9`, `kdeconnect`, `termoneplus`, `firefox`,
-`fdroid`) still pin a versionCode and are due to move.
+
+A subset of a bundle is its own option sharing the fetcher and the patch: `nextcloud-core` is
+`prebuilt/fetch-nextcloud.sh` with `NEXTCLOUD_MODULES` set and a verbatim copy of `nextcloud`'s
+patch. The fetcher removes bundle APKs it was not asked for, since each module is guarded on its
+APK and a stale one would ship. The two are mutually exclusive (`require.sh` checks, and the second
+patch would fail to apply).
 
 Because the manifest moves with each fetch, the module cannot mirror its `<uses-library>` list:
 20.0 modules set `LOCAL_ENFORCE_USES_LIBRARIES := false`, 22.2+ `enforce_uses_libs: false`.
