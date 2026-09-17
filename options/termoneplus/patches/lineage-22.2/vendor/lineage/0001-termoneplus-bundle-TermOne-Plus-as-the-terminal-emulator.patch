@@ -1,0 +1,113 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: TheDBP <TheDBP@users.noreply.github.com>
+Date: Tue, 15 Sep 2026 09:21:38 -0400
+Subject: [PATCH] termoneplus: bundle TermOne Plus as the terminal emulator
+
+vendor/lineage/prebuilts/termoneplus module, installed unmodified with its JNI libraries beside it,
+plus a guarded PRODUCT_PACKAGES line in config/common.mk. The APK is fetched by the termoneplus
+option's fetch.sh; the module is a no-op without it.
+
+---
+ config/common.mk                     |  9 +++++++++
+ prebuilts/termoneplus/.gitignore     |  3 +++
+ prebuilts/termoneplus/Android.bp     | 26 ++++++++++++++++++++++++++
+ prebuilts/termoneplus/jni/Android.mk | 27 +++++++++++++++++++++++++++
+ 4 files changed, 65 insertions(+)
+ create mode 100644 prebuilts/termoneplus/.gitignore
+ create mode 100644 prebuilts/termoneplus/Android.bp
+ create mode 100644 prebuilts/termoneplus/jni/Android.mk
+
+diff --git a/config/common.mk b/config/common.mk
+index 5265427b..688ff753 100644
+--- a/config/common.mk
++++ b/config/common.mk
+@@ -229,6 +229,15 @@ PRODUCT_ARTIFACT_PATH_REQUIREMENT_ALLOWED_LIST += \
+ endif
+ endif
+ 
++# termoneplus option: TermOne Plus terminal emulator. Guarded on the fetched APK so a build without
++# the option (no APK) is unaffected; require.sh fails the build if the option is on and the APK is
++# missing.
++ifneq ($(wildcard vendor/lineage/prebuilts/termoneplus/TermOnePlus.apk),)
++PRODUCT_PACKAGES += TermOnePlus
++# The unpacked JNI libraries, one module each (prebuilts/termoneplus/jni/Android.mk).
++PRODUCT_PACKAGES += $(patsubst %.so,TermOnePlus_jni_%,$(notdir $(wildcard vendor/lineage/prebuilts/termoneplus/lib/arm64-v8a/*.so)))
++endif
++
+ # SystemUI
+ PRODUCT_DEXPREOPT_SPEED_APPS += \
+     CarSystemUI \
+diff --git a/prebuilts/termoneplus/.gitignore b/prebuilts/termoneplus/.gitignore
+new file mode 100644
+index 00000000..9c721d6c
+--- /dev/null
++++ b/prebuilts/termoneplus/.gitignore
+@@ -0,0 +1,3 @@
++# Fetched by the termoneplus option (forge/prebuilt/fetch-termoneplus.sh); never committed.
++TermOnePlus.apk
++lib/
+diff --git a/prebuilts/termoneplus/Android.bp b/prebuilts/termoneplus/Android.bp
+new file mode 100644
+index 00000000..d560db4c
+--- /dev/null
++++ b/prebuilts/termoneplus/Android.bp
+@@ -0,0 +1,26 @@
++// TermOne Plus (com.termoneplus) prebuilt terminal emulator, the F-Droid build. The APK is fetched
++// and sha256-verified by the termoneplus option into this directory and is gitignored, never
++// committed.
++//
++// preprocessed: true installs the APK byte for byte. Any rewrite (uncompressing libs or dex,
++// re-aligning) invalidates the whole-file APK Signature Scheme v2 signature; PackageManager then
++// rejects the package at boot scan without logging, so the build succeeds and the app is absent.
++//
++// skip_preprocessed_apk_checks: preprocessed otherwise asserts the APK already has uncompressed
++// JNI libs and dex. TermOne Plus declares extractNativeLibs=true and ships both compressed, which
++// is correct for it -- they are extracted at install -- and repacking them is not ours to do.
++//
++// The native libraries (pty handling) are installed beside the APK by jni/Android.mk;
++// PackageManager never extracts them for a bundled app, and without them every launch dies in
++// UnsatisfiedLinkError.
++android_app_import {
++    name: "TermOnePlus",
++    apk: "TermOnePlus.apk",
++    presigned: true,
++    preprocessed: true,
++    skip_preprocessed_apk_checks: true,
++    product_specific: true,
++    // enforce_uses_libs: false -- the build otherwise refuses any APK whose manifest <uses-library>
++    // tags it was not told about, and those change with every upstream release.
++    enforce_uses_libs: false,
++}
+diff --git a/prebuilts/termoneplus/jni/Android.mk b/prebuilts/termoneplus/jni/Android.mk
+new file mode 100644
+index 00000000..803f9556
+--- /dev/null
++++ b/prebuilts/termoneplus/jni/Android.mk
+@@ -0,0 +1,27 @@
++# TermOne Plus JNI libraries. The APK is installed byte for byte (see ../Android.bp) and
++# PackageManager does not extract native libraries for a bundled app, so the libraries
++# fetch-termoneplus.sh unpacked into ../lib/arm64-v8a/ are installed beside the APK as
++# app/TermOnePlus/lib/arm64/. One Make module per library: the build refuses ELF files in
++# PRODUCT_COPY_FILES, and no Soong prebuilt type installs under app/. common.mk adds the modules to
++# PRODUCT_PACKAGES from the same wildcard.
++LOCAL_PATH := $(call my-dir)/..
++
++TERMONEPLUS_JNI_LIBS := $(notdir $(wildcard $(LOCAL_PATH)/lib/arm64-v8a/*.so))
++
++define termoneplus-jni-module
++include $$(CLEAR_VARS)
++LOCAL_MODULE := TermOnePlus_jni_$(1:.so=)
++LOCAL_MODULE_CLASS := SHARED_LIBRARIES
++LOCAL_MODULE_STEM := $(1:.so=)
++LOCAL_MODULE_SUFFIX := .so
++LOCAL_MODULE_TAGS := optional
++LOCAL_SRC_FILES := lib/arm64-v8a/$(1)
++LOCAL_MULTILIB := 64
++LOCAL_PRODUCT_MODULE := true
++LOCAL_MODULE_PATH := $$(TARGET_OUT_PRODUCT)/app/TermOnePlus/lib/arm64
++LOCAL_STRIP_MODULE := false
++LOCAL_CHECK_ELF_FILES := false
++include $$(BUILD_PREBUILT)
++endef
++
++$(foreach lib,$(TERMONEPLUS_JNI_LIBS),$(eval $(call termoneplus-jni-module,$(lib))))

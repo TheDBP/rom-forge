@@ -1,0 +1,132 @@
+# rom-forge tools
+
+Port-assessment scripts, plus the machinery `bootstrap.sh` calls.
+
+Bash and `grep`/`awk`/`comm`. Need a synced tree, not a built one. Run on the host or in the
+container.
+
+## Quick reference
+
+| tool | run it | what you get |
+|---|---|---|
+| `check-platform-support.sh` | before porting | what upstream no longer gives this SoC — the cheapest, most predictive check |
+| `find-orphaned-sepolicy-types.sh` | before porting | SELinux types the device references that the new branch deleted |
+| `find-removed-platform-symbols.sh` | before porting | C/C++ platform constants it lost |
+| `triage-build-log.sh` | after a failed build | a wall of errors collapsed into a few classes |
+| `check-image-labels.sh` | when packaging fails | every unlabeled path at once, instead of one per build |
+| `unpack-block-ota.sh` | when flashing | partition images out of a `payload.bin` OTA, for fastboot-only flashing |
+| `check-sigpipe.sh` | before committing | pipelines that will die silently under `set -o pipefail` |
+| `dev-shell.sh` | any time | an interactive shell in the build container |
+| `make-keys.sh` | once, before the first release | signing keys in a directory outside every repo; point `KEYS_DIR` at it in `device.conf.local` |
+| `new-device-repo.sh` | once, at the start | scaffolds a device repo, vendors `forge/`, and with `--codename` fills in `device.conf` and the local manifest by looking the device up |
+
+Called for you by `bootstrap.sh`, listed here so you know what they are:
+
+| tool | what it does |
+|---|---|
+| `apply-overlay.sh` | installs local_manifests, applies the selected options and this device's patches, vendors recovered trees (`VENDORED_PROJECTS`), merges kernel fragments (`KERNEL_EXTRA_CONFIGS`) and kernel patches (`KERNEL_EXTRA_PATCHES`) |
+| `extract-gapps-apps.sh` | matches APKs in a GApps zip by package name via aapt2, stages them as `android_app_import` prebuilts with `overrides:` so they replace the Lineage equivalents |
+| `release.sh` | publishes the redistributable preset and refuses anything else — see [docs/RELEASING.md](../docs/RELEASING.md) |
+| `extract-nextbit-oem-assets.sh` | pulls sounds, wallpapers and the boot animation out of a Nextbit Robin stock ROM (nav-bar icons are the `nav-icons` option, redrawn, not extracted) (`OEM_ASSET_PACK=nextbit-robin`) — see [docs/OEM-ASSETS.md](../docs/OEM-ASSETS.md) |
+| `sync-forge.sh` | vendors `forge/` into a device repo at a pinned commit |
+| `refresh-patches.sh` | regenerates `overlay/patches` from your commits — **clean tree only** (GOTCHAS 14) |
+| `measure-touch-rate.sh` | how fast the touchscreen really reports, measured inside one contact on the real digitizer — injected input never reaches it (GOTCHAS 25) |
+| `bench-launch.sh` | cold app-launch times over adb (min/median/max of N runs) — for A/B-ing a tuning change on one phone, meaningless across phones or ROMs |
+| `symbolize-odex-pcs.py` | names the bare `services.odex` PCs in an ANR/tombstone native dump from an oatdump listing — dex-preopted framework code ships without debug info, so debuggerd prints only file offsets |
+| `check-hal-readiness.sh` | HALs the manifest declares with nothing to serve them — finds them before a build-flash-boot cycle does |
+| `check-bpf-readiness.sh` | what a kernel without eBPF (or other modern syscalls) will break; `--src` scans code, `--log` reads what the device actually got |
+| `propagate-forge.sh` | pushes an engine change out to every device repo beside this one, fast-forwarding each branch to its remote first |
+
+## Assessing a port
+
+`OLD_SRC` is a checkout on a branch where the device built; `NEW_SRC` is the target branch. Both
+must be on disk. Keep the old tree until the port lands.
+
+```sh
+# What does upstream no longer give this SoC?
+./tools/check-platform-support.sh <NEW_SRC> device/<vendor>/<codename>
+
+# Which SELinux types did the new branch delete?
+./tools/find-orphaned-sepolicy-types.sh <OLD_SRC> <NEW_SRC> device/<vendor>/<codename>
+
+# Which C/C++ constants did it lose?
+./tools/find-removed-platform-symbols.sh <OLD_SRC> <NEW_SRC> device/<vendor>/<codename>
+```
+
+Each `[OUT]` gate means the device no longer gets whatever that block configures. The three outputs
+are the work list.
+
+## Triaging a build
+
+```sh
+mka -k -j12 bacon 2>&1 | tee build.log     # -k keeps going and collects every failure
+./tools/triage-build-log.sh build.log      # collapse them into classes
+```
+
+Use `-k` on a new port: failures cluster. A run reporting 274 failed edges resolved to two fixes,
+270 of them a single missing BoardConfig flag.
+
+## When packaging fails
+
+```sh
+./tools/check-image-labels.sh <SRC> <codename> device/<vendor>/<codename> [<reference-out>]
+```
+
+`e2fsdroid` refuses to build `system.img` unless every path has a label, reports one path per run,
+and fails at ~99% of the build. Pass a `REFERENCE_OUT` from a device that builds to filter benign
+cases.
+
+## Why these exist
+
+Porting to a newer branch fails one way: upstream deleted something the device tree still
+references, silently. The providing block is gated behind a platform list that no longer names the
+SoC, or a header dropped the constant. The build then fails far from the cause, one item per run,
+because `checkpolicy` and the compiler stop at the first error.
+
+## Worked example: ether, lineage-18.1 → 19.1
+
+What the tools report, on a real port:
+
+| Tool | What it would have said up front |
+|---|---|
+| `check-platform-support.sh` | `device/qcom/sepolicy-legacy/SEPolicy.mk` no longer lists `msm8992`, so the whole legacy qcom vendor policy is gone. Also flags the inverted `BOARD_SEPOLICY_M4DEFS` gate — the reason importing a newer vendor policy trips AOSP neverallows. |
+| `find-orphaned-sepolicy-types.sh` | `adsprpcd_file`, `qdisplay_service`, `sysfs_graphics`, `perfd`, `debugfs_rmt`, `time_data_file`, … — six build cycles' worth, in one pass. |
+| `find-removed-platform-symbols.sh` | AOSP 12 dropped the vendor section of `system/camera.h`; the bundled QCamera2 HAL uses eight of those constants. |
+| `triage-build-log.sh` | 274 edges → `BUILD_BROKEN_ELF_PREBUILT_PRODUCT_COPY_FILES` + a kernel toolchain flag. |
+
+## Fixing what they find
+
+Restore, do not redesign. Copy the original definition and its context entry verbatim from the old
+tree:
+
+- a SELinux type without its `file_contexts` / `genfs_contexts` / `property_contexts` line parses
+  fine and labels nothing, so the domain is inert at runtime;
+- a C constant must keep its original value — prebuilt blobs and the framework already agree on those
+  numbers, so renumbering breaks the ABI silently. Put them in a device-local compat header
+  force-included via `LOCAL_CFLAGS += -include <header>`, which leaves vendor sources diffable
+  against upstream.
+
+Script-writing traps that produced wrong answers here are collected in **GOTCHAS 17**.
+
+## The pieces that are not in `tools/`
+
+Not everything the forge runs lives here. These get invoked for you, but they are where a build
+actually fails, so they are worth knowing by name.
+
+| | |
+|---|---|
+| `bootstrap.sh` | the orchestrator — reads `device.conf`, then `device.conf.local` if present, syncs, applies the overlay, builds |
+| `lib/presets.sh` | resolves a preset name into an option list and a build tag. `EXTRA_OPTIONS` is unioned in here, and the tag suffix for each option it adds (`-oem`, `-nextcloud`) is derived here rather than written by hand |
+| `docker/prefetch.sh` | downloads the build's network inputs into `/dl` in-container, so they overlap `repo sync` instead of running after it. A set-but-failed download is fatal, deliberately |
+| `docker/_build_rom.sh` | runs the build inside the container and calls each enabled option's `require.sh` before and `post-build.sh` after |
+| `prebuilt/fetch-firefox.sh` | downloads the pinned Fennec F-Droid APK and verifies package name and ABI |
+| `prebuilt/fetch-fdroid.sh` | downloads the pinned, sha256-verified F-Droid client and Privileged Extension |
+| `prebuilt/fetch-magisk.sh` | downloads Magisk for the `root` option's boot-image patch |
+| `prebuilt/fetch-k9.sh`, `fetch-kdeconnect.sh`, `fetch-termoneplus.sh` | download the pinned, verified APK for the `k9`, `kdeconnect` and `termoneplus` options |
+
+An option can also carry its own hooks, which `_build_rom.sh` runs by name:
+
+- `require.sh` — before the build. Non-zero stops it. `gapps` uses this to refuse a build whose app
+  swaps were never staged, rather than shipping Lineage's apps under a GApps tag.
+- `post-build.sh` — after a successful build. Non-zero fails it. `root` patches the boot image here;
+  `firefox` checks the APK it shipped can still install.

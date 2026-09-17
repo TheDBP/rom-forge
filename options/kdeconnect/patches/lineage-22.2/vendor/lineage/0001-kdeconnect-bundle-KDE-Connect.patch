@@ -1,0 +1,66 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: TheDBP <TheDBP@users.noreply.github.com>
+Date: Tue, 15 Sep 2026 14:09:19 -0400
+Subject: [PATCH] kdeconnect: bundle KDE Connect
+
+vendor/lineage/prebuilts/kdeconnect module, installed unmodified, plus a guarded PRODUCT_PACKAGES
+line in config/common.mk. The APK is fetched by the kdeconnect option's fetch.sh; the module is a
+no-op without it.
+
+---
+ config/common.mk                |  6 ++++++
+ prebuilts/kdeconnect/.gitignore |  2 ++
+ prebuilts/kdeconnect/Android.bp | 18 ++++++++++++++++++
+ 3 files changed, 26 insertions(+)
+ create mode 100644 prebuilts/kdeconnect/.gitignore
+ create mode 100644 prebuilts/kdeconnect/Android.bp
+
+diff --git a/config/common.mk b/config/common.mk
+index 5265427b..9af073a2 100644
+--- a/config/common.mk
++++ b/config/common.mk
+@@ -199,6 +199,12 @@ PRODUCT_PACKAGES += \
+ PRODUCT_COPY_FILES += \
+     vendor/lineage/prebuilt/common/etc/init/init.openssh.rc:$(TARGET_COPY_OUT_PRODUCT)/etc/init/init.openssh.rc
+ 
++# kdeconnect option: KDE Connect (phone <-> desktop). Guarded on the fetched APK so a build without
++# the option (no APK) is unaffected; require.sh fails the build if the option is on and the APK is missing.
++ifneq ($(wildcard vendor/lineage/prebuilts/kdeconnect/KDEConnect.apk),)
++PRODUCT_PACKAGES += KDEConnect
++endif
++
+ # rsync
+ PRODUCT_PACKAGES += \
+     rsync
+diff --git a/prebuilts/kdeconnect/.gitignore b/prebuilts/kdeconnect/.gitignore
+new file mode 100644
+index 00000000..3076ad9f
+--- /dev/null
++++ b/prebuilts/kdeconnect/.gitignore
+@@ -0,0 +1,2 @@
++# Fetched by the kdeconnect option (forge/prebuilt/fetch-kdeconnect.sh); never committed.
++KDEConnect.apk
+diff --git a/prebuilts/kdeconnect/Android.bp b/prebuilts/kdeconnect/Android.bp
+new file mode 100644
+index 00000000..bb3704c6
+--- /dev/null
++++ b/prebuilts/kdeconnect/Android.bp
+@@ -0,0 +1,18 @@
++// KDE Connect (org.kde.kdeconnect_tp) prebuilt. The APK is fetched and sha256-verified by the
++// kdeconnect option into this directory and is gitignored, never committed.
++//
++// preprocessed: true installs the APK byte for byte. Any rewrite (uncompressing dex, re-aligning)
++// invalidates the whole-file APK Signature Scheme v2 signature, and with targetSdk >= 30
++// PackageManager rejects the package at boot scan without logging, so the build succeeds and the
++// app is absent. No skip_preprocessed_apk_checks: the APK is aligned with its one JNI library
++// stored, so the check passes, and the build fails if the flag is set on an APK that does not need it.
++android_app_import {
++    name: "KDEConnect",
++    apk: "KDEConnect.apk",
++    presigned: true,
++    preprocessed: true,
++    product_specific: true,
++    // enforce_uses_libs: false -- the build otherwise refuses any APK whose manifest <uses-library>
++    // tags it was not told about, and those change with every upstream release.
++    enforce_uses_libs: false,
++}

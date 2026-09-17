@@ -1,0 +1,108 @@
+# Debugging a boot loop
+
+A port that hangs on the boot animation and reboots itself is a `system_server` crash loop.
+
+## Order
+
+1. Boot to recovery, pull `/data/tombstones`. **Not pstore.**
+2. Only if that is empty, pull `console-ramoops-0` and `pmsg-ramoops-0`.
+3. If pmsg has no tombstone and no Java `FATAL EXCEPTION`, stop reading logs and get live adb.
+
+## Tombstones first
+
+| | `/data/tombstones` | pmsg-ramoops |
+|---|---|---|
+| Survives cold power-off | yes | **no** |
+| Loses the first crash | no | **yes, quickly** |
+| Names faulting library and function | **yes** | only if the record survived |
+| Holds every crash of every process | **yes** | last few seconds only |
+
+From TWRP, where adb needs no authorisation:
+
+```sh
+adb shell mount /data
+adb pull /data/tombstones ./diag/
+```
+
+Census before reading any single one:
+
+```sh
+for f in tombstone_[0-9]*; do case "$f" in *.pb) continue;; esac
+  echo "$(grep -aoE '^signal [0-9]+ \([A-Z]+\)' "$f" | head -1) | $(grep -aoE '^Cmdline: .*' "$f" | head -1)"
+done | sort | uniq -c | sort -rn
+```
+
+## Why pstore misleads
+
+pstore survives a reboot but not a cold power-off, and the pmsg ring is 256K–512K
+(`android,ramoops-pmsg-size`). A loop wraps it many times, so what remains is the tail of the last
+cycle — real-looking errors, none causal.
+
+- Don't conclude from a logged exception that it was thrown. `getServiceOrThrow` appears in the stack
+  trace of a caught-and-logged warning exactly as it does in a crash. Read the AOSP source.
+- Don't chase `zygote received signal 9`. `SigChldHandler` has zygote SIGKILL *itself* when
+  system_server dies. One per loop iteration is expected and says only that system_server died.
+- Don't chase a restarting service nothing binds to.
+
+## Live adb instead
+
+`adbd` and `logd` do not depend on `system_server`, so they run through the loop.
+
+**First check USB adb can work on this kernel.** adbd drives FunctionFS with AIO, which arrived in
+Linux 3.15. Older kernels return `EINVAL` and the host sees a device stuck `offline`:
+
+```sh
+grep -A12 'ffs_epfile_operations' <kernel>/drivers/usb/gadget/f_fs.c   # no .aio_read/.aio_write = impossible
+```
+
+AOSP removed the blocking fallback when adb became a mainline module, so there is no property to
+flip — backport FFS AIO, or restore a blocking path in adbd.
+
+**Wireless adb is unaffected** — plain TCP, never touches FunctionFS. On an old-kernel device it is
+the cheaper route, but networking has to work first.
+
+If USB adb is viable, two things block it:
+
+**adbd never starts.** `sys.usb.config` stays `none` until the framework sets it, and a crashing
+system_server never gets there.
+
+```make
+PRODUCT_PROPERTY_OVERRIDES += persist.sys.usb.config=adb
+```
+
+**adb wants authorisation.** On `userdebug` `ro.adb.secure=1`, and a crashing system_server cannot
+draw the prompt. Ship your host key:
+
+```make
+PRODUCT_ADB_KEYS := device/<vendor>/<codename>/adb_keys.pub
+```
+
+Copy `~/.android/adbkey.pub` there. Gated to `eng`/`userdebug` in `product_config.mk`, so it cannot
+leak into a `user` build.
+
+> Mark that patch TEMPORARY and revert before distributing. It grants one machine adb access to every
+> device running the build.
+
+```sh
+adb wait-for-device logcat -b all > loop.txt
+```
+
+## More pmsg ring, if needed
+
+Rebalance the existing reservation rather than touching the memory map:
+
+```
+buffer-size 0x200000 = console 0x100000 + ftrace 0x10000 + pmsg 0x80000 + <dump records>
+```
+
+- Do move slack from dump records to pmsg. `console-ramoops` already has the kernel state.
+- Don't set a zone to `0` on pre-4.x kernels. Shrink it instead.
+
+## Once you can see
+
+1. Native crash in system_server (tombstone) — the real answer if present
+2. Uncaught Java exception during a boot phase
+3. A HAL blocking `getService()` forever — `tools/check-hal-readiness.sh`
+4. Watchdog kill (60 s; find the blocked lock)
+
+Everything else is noise until those four are clear.

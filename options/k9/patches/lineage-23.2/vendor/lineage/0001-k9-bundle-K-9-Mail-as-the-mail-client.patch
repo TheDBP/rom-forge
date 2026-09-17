@@ -1,0 +1,67 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: TheDBP <TheDBP@users.noreply.github.com>
+Date: Mon, 14 Sep 2026 09:36:44 -0400
+Subject: [PATCH] k9: bundle K-9 Mail as the mail client
+
+vendor/lineage/prebuilts/k9 module, installed unmodified, plus a guarded PRODUCT_PACKAGES line in
+config/common.mk. The APK is fetched by the k9 option's fetch.sh; the module is a no-op without it.
+---
+ config/common.mk        |  6 ++++++
+ prebuilts/k9/.gitignore |  2 ++
+ prebuilts/k9/Android.bp | 18 ++++++++++++++++++
+ 3 files changed, 24 insertions(+)
+ create mode 100644 prebuilts/k9/.gitignore
+ create mode 100644 prebuilts/k9/Android.bp
+
+diff --git a/config/common.mk b/config/common.mk
+index 3b68625..7bb1dde 100644
+--- a/config/common.mk
++++ b/config/common.mk
+@@ -226,6 +226,12 @@ PRODUCT_PACKAGES_DEBUG += \
+ PRODUCT_PACKAGES += \
+     rsync
+ 
++# k9 option: K-9 Mail as the mail client. Guarded on the fetched APK so a build without the option
++# (no APK) is unaffected; require.sh fails the build if the option is on and the APK is missing.
++ifneq ($(wildcard vendor/lineage/prebuilts/k9/K9Mail.apk),)
++PRODUCT_PACKAGES += K9Mail
++endif
++
+ # Storage manager
+ PRODUCT_PRODUCT_PROPERTIES += \
+     ro.storage_manager.enabled=true
+diff --git a/prebuilts/k9/.gitignore b/prebuilts/k9/.gitignore
+new file mode 100644
+index 0000000..f13f748
+--- /dev/null
++++ b/prebuilts/k9/.gitignore
+@@ -0,0 +1,2 @@
++# Fetched by the k9 option (forge/prebuilt/fetch-k9.sh); never committed.
++K9Mail.apk
+diff --git a/prebuilts/k9/Android.bp b/prebuilts/k9/Android.bp
+new file mode 100644
+index 0000000..149bdd0
+--- /dev/null
++++ b/prebuilts/k9/Android.bp
+@@ -0,0 +1,18 @@
++// K-9 Mail (com.fsck.k9) prebuilt mail client. The APK is fetched and sha256-verified by the k9
++// option into this directory and is gitignored, never committed.
++//
++// preprocessed: true installs the APK byte for byte. Any rewrite (uncompressing libs or dex,
++// re-aligning) invalidates the whole-file APK Signature Scheme v2 signature, and with targetSdk 35
++// PackageManager rejects the package at boot scan without logging, so the build succeeds and the
++// app is absent. No skip_preprocessed_apk_checks: the current APK passes the check, and the build
++// fails if the flag is set on an APK that does not need it.
++android_app_import {
++    name: "K9Mail",
++    apk: "K9Mail.apk",
++    presigned: true,
++    preprocessed: true,
++    product_specific: true,
++    // enforce_uses_libs: false -- the build otherwise refuses any APK whose manifest <uses-library>
++    // tags it was not told about, and those change with every upstream release.
++    enforce_uses_libs: false,
++}
+-- 
+2.53.0
+
