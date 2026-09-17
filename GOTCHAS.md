@@ -178,6 +178,10 @@ installed this way.
   before 14, and A13's `app_import` skips JNI uncompression only for testcases installs.
 - Do compare the installed APK against the fetched one after a build. Any difference means it cannot
   install.
+- On 14+ with `preprocessed: true`, Soong's `check_prebuilt_presigned_apk.py` fails
+  `Contains compressed dex files and is privileged` for a priv-app whose dex is compressed, and
+  `does not actually have any issues` if `skip_preprocessed_apk_checks` is set on one that passes.
+  Set the flag from the APK's contents, never by hand (`fdroid_bp_module` does).
 
 ## 24. CPU hotplug against a userspace that assumes stable topology
 This kernel deletes a CPU's entire `cpufreq/` directory when it goes offline. A `read()` of

@@ -8,7 +8,8 @@
 # Each APK ships byte for byte, so what F-Droid packed decides how it is wired, per fetch: native
 # libraries compressed or unaligned in the APK -> lib/arm64-v8a/*.so unpacked to <App>/lib/arm64-v8a/
 # beside it for the module to install; on Soong branches (the patch ships no Android.mk) the module
-# file is written here, Android.bp, gitignored, with skip_preprocessed_apk_checks matching. The
+# file is written here, Android.bp, gitignored, with skip_preprocessed_apk_checks matching (the
+# Privileged Extension needs it whenever its dex is compressed, which F-Droid's builds are). The
 # option's post-patch.sh copies APKs and libraries on to a device tree that carries its own F-Droid
 # modules (ether 20.0).
 set -euo pipefail

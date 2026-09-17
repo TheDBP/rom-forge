@@ -87,6 +87,16 @@ fdroid_apk_libs_loadable() {
   [ "$n" -gt 0 ] && echo no || echo yes
 }
 
+# apk -> "yes" if any classes*.dex entry is compressed. Soong's check also refuses that on a
+# preprocessed PRIVILEGED app (--uncompress-priv-app-dex, on unless the device sets
+# DONT_UNCOMPRESS_PRIV_APPS_DEXS), so skip_preprocessed_apk_checks must be set on one. Compressed
+# dex in a priv-app is a performance policy, not a runtime requirement: it runs.
+fdroid_apk_dex_compressed() {
+  local n
+  n="$(unzip -v "$1" 'classes*.dex' 2>/dev/null | awk '$NF ~ /^classes[0-9]*\.dex$/ && $2 != "Stored" {c++} END {print c+0}')"
+  [ "$n" -gt 0 ] && echo yes || echo no
+}
+
 # pkg -> suggestedVersionCode, or nonzero (offline, unknown package)
 fdroid_latest_version_code() {
   local json
@@ -187,14 +197,19 @@ fdroid_bp_begin() {  # FILE WRITER
     echo "// re-aligning) invalidates the whole-file APK Signature Scheme v2 signature, and PackageManager"
     echo "// then rejects the package at boot scan without logging, so the build succeeds and the app is"
     echo "// absent. skip_preprocessed_apk_checks goes on exactly the APKs whose native libraries are"
-    echo "// compressed or unaligned: Soong fails the build if it is set on one that passes the check."
+    echo "// compressed or unaligned, or that are privileged with compressed dex: Soong fails the build"
+    echo "// if it is set on one that passes the check."
     echo "// enforce_uses_libs: false -- the build otherwise refuses any APK whose manifest <uses-library>"
     echo "// tags it was not told about, and those change with releases."
   } > "$1"
 }
 
 fdroid_bp_module() {  # FILE NAME APK PKG UNPACKED [EXTRA_PROPERTY...]
-  local file="$1" name="$2" apk="$3" pkg="$4" unpacked="$5"; shift 5
+  local file="$1" name="$2" apk="$3" pkg="$4" unpacked="$5" skip=""; shift 5
+  [ "$unpacked" = yes ] && skip="libraries unpacked beside the APK"
+  case " $* " in *" privileged: true, "*)
+    [ "$(fdroid_apk_dex_compressed "$(dirname "$file")/$apk")" = yes ] && skip="${skip:+$skip; }privileged with compressed dex" ;;
+  esac
   {
     echo
     echo "// $pkg"
@@ -203,7 +218,7 @@ fdroid_bp_module() {  # FILE NAME APK PKG UNPACKED [EXTRA_PROPERTY...]
     echo "    apk: \"$apk\","
     echo "    presigned: true,"
     echo "    preprocessed: true,"
-    [ "$unpacked" = yes ] && echo "    skip_preprocessed_apk_checks: true, // libraries unpacked beside the APK"
+    [ -n "$skip" ] && echo "    skip_preprocessed_apk_checks: true, // $skip"
     echo "    product_specific: true,"
     echo "    enforce_uses_libs: false,"
     for p in "$@"; do echo "    $p"; done
