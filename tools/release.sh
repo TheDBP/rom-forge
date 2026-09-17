@@ -3,7 +3,8 @@
 #
 #   ./forge/tools/release.sh --dry-run          # show exactly what would be published
 #   ./forge/tools/release.sh                    # audit and publish
-#   ./forge/tools/release.sh --preset clean     # pick the preset explicitly
+#   ./forge/tools/release.sh --preset clean     # pick the preset explicitly; a second preset the
+#                                               # same day is added to that day's release
 #
 # device.conf knobs: RELEASE_NAME (release title, default the codename), RELEASE_NAME_DENY,
 # RELEASE_AUDIT_ALLOW (cleared sha256s), RELEASE_NO_RECOVERY=1 (recovery lives in boot; publish
@@ -270,22 +271,39 @@ elif [ -f "$RECOVERY" ]; then
 else
   die "no $RECOVERY -- the zip cannot be installed without it. Rebuild, or if this device boots from the zip's own image, set RELEASE_NO_RECOVERY=1"
 fi
-NOTES="$(mktemp)"; trap 'rm -f "$NOTES" "${imgsums:-}" "${RECOVERY_ASSET:-}"' EXIT
+NOTES="$(mktemp)"; SECTION="$(mktemp)"; trap 'rm -f "$NOTES" "$SECTION" "${imgsums:-}" "${RECOVERY_ASSET:-}"' EXIT
 # Not `${VAR:-text}`: that expands to VAR's VALUE when it is set, which once put a local path in a
 # published release body.
-if [ -n "$RECOVERY_ASSET" ]; then RECOVERY_NOTE="The zip does not write recovery."
-else RECOVERY_NOTE="The zip carries its own boot image, recovery included."; fi
+if [ -n "$RECOVERY_ASSET" ]; then
+  RECOVERY_NOTE="The zip does not write recovery."
+  RECOVERY_STEP="\`fastboot flash recovery\` the \`-recovery.img\` published beside the zip you pick, "
+else
+  RECOVERY_NOTE="The zip carries its own boot image, recovery included."
+  RECOVERY_STEP=""
+fi
+# The body is one shared head plus one section per preset, so a second preset published the same
+# day (same tag, same commit) appends its section instead of needing a release of its own.
 cat > "$NOTES" <<EOF
-Unofficial LineageOS build for \`$DEVICE_CODENAME\`, branch \`$BRANCH\`, preset \`$VN\`.
+Unofficial LineageOS build for \`$DEVICE_CODENAME\`, branch \`$BRANCH\`. One zip per preset below.
 
-**What is in it:** LineageOS plus the options this preset selected.
-
-**What is not:** no Google apps, and none of the manufacturer's own boot animation, wallpapers or
-system sounds. Those are theirs, not mine, so they are not mine to hand out. If you want them on
+**What is not in it:** no Google apps, and none of the manufacturer's own boot animation, wallpapers
+or system sounds. Those are theirs, not mine, so they are not mine to hand out. If you want them on
 your phone, the build system can put them back from a copy of your phone's own stock firmware --
 see \`forge/docs/OEM-ASSETS.md\`.
 
 Like every Android ROM, this contains proprietary vendor firmware for the hardware to work at all.
+
+**Installing:** ${RECOVERY_STEP}boot into recovery, *Factory reset*, then *Apply update → ADB
+sideload* the zip, reboot. Updating from an earlier one of these builds: sideload the new zip, no
+wipe. $RECOVERY_NOTE
+
+No warranty. It wipes your phone. You already knew that.
+EOF
+cat > "$SECTION" <<EOF
+
+## \`$VN\`
+
+LineageOS plus: $(printf '%s' "${VOPTS:-nothing, this is the baseline}" | sed 's/ /, /g').
 
 \`\`\`
 $(basename "$ZIP")
@@ -293,24 +311,31 @@ sha256  $SUM${RECOVERY_ASSET:+
 $(basename "$RECOVERY_ASSET")
 sha256  $RECOVERY_SUM}
 \`\`\`
-
-**Installing:** ${RECOVERY_ASSET:+\`fastboot flash recovery $(basename "$RECOVERY_ASSET")\`, }boot into recovery,
-*Factory reset*, then *Apply update → ADB sideload* the zip, reboot. Updating from an earlier one of
-these builds: sideload the new zip, no wipe. $RECOVERY_NOTE
-
-No warranty. It wipes your phone. You already knew that.
 EOF
+cat "$SECTION" >> "$NOTES"
 # The notes are published verbatim: nothing from this host may be in them.
 grep -qF -e "$REPO" -e "$TMPDIR" -e "$HOME" "$NOTES" && die "refusing: release notes contain a path from this machine: $(grep -F -e "$REPO" -e "$TMPDIR" -e "$HOME" "$NOTES" | head -1)"
+HEAD_SHA="$(git -C "$REPO" rev-parse HEAD)"
 
 # ---- 7. publish -----------------------------------------------------------------------------------
 TARGET="${RELEASE_REPO:-$(git -C "$REPO" remote get-url origin 2>/dev/null | sed -E 's#\.git$##; s#.*[:/]([^/]+/[^/]+)$#\1#')}"
 [ -n "$TARGET" ] || die "no release target: set RELEASE_REPO in device.conf, or give this repo an origin"
 
+# A release already tagged today, at this commit, is another preset of the same build: add this
+# one to it. At any other commit it is a different build, and nothing here replaces a release.
+EXISTING=""
+if command -v gh >/dev/null && gh release view "$TAGNAME" --repo "$TARGET" >/dev/null 2>&1; then
+  tagged="$(git -C "$REPO" ls-remote origin "refs/tags/$TAGNAME" 2>/dev/null | cut -f1)"
+  [ "$tagged" = "$HEAD_SHA" ] || die "release $TAGNAME already exists on $TARGET at ${tagged:0:12}; this tree is at ${HEAD_SHA:0:12}"
+  EXISTING="$(gh release view "$TAGNAME" --repo "$TARGET" --json assets -q '.assets[].name' | tr '\n' ' ')"
+  case " $EXISTING " in *" $(basename "$ZIP") "*) die "release $TAGNAME already carries $(basename "$ZIP")" ;; esac
+  TITLE="$(gh release view "$TAGNAME" --repo "$TARGET" --json name -q .name | sed "s/)\$/, $VN)/")"
+fi
+
 echo
 info "ready to publish"
 echo "   repo:   $TARGET"
-echo "   tag:    $TAGNAME"
+echo "   tag:    $TAGNAME${EXISTING:+ (exists at this commit: adding to it, has $EXISTING)}"
 echo "   title:  $TITLE"
 echo "   asset:  $(basename "$ZIP")"
 echo "   sha256: $SUM"
@@ -319,7 +344,7 @@ echo "   sha256: $SUM"
 if [ "$DRY" = 1 ]; then
   echo
   info "--dry-run: nothing published. Release notes would be:"
-  sed 's/^/   | /' "$NOTES"
+  if [ -n "$EXISTING" ]; then sed 's/^/   | /' "$SECTION"; echo "   (appended to the existing notes)"; else sed 's/^/   | /' "$NOTES"; fi
   exit 0
 fi
 
@@ -327,12 +352,17 @@ command -v gh >/dev/null || die "gh CLI not installed"
 if gh repo view "$TARGET" --json isPrivate -q .isPrivate 2>/dev/null | grep -qx true; then
   echo "   note: $TARGET is PRIVATE — the release will not be publicly downloadable until it is public."
 fi
-gh release view "$TAGNAME" --repo "$TARGET" >/dev/null 2>&1 && die "release $TAGNAME already exists on $TARGET"
 
-# Without --target gh tags the repo's default branch, not the branch this zip came from.
-HEAD_SHA="$(git -C "$REPO" rev-parse HEAD)"
-git -C "$REPO" fetch -q origin "$BRANCH" 2>/dev/null
-git -C "$REPO" merge-base --is-ancestor "$HEAD_SHA" "origin/$BRANCH" 2>/dev/null \
-  || die "refusing: HEAD ${HEAD_SHA:0:12} is not on origin/$BRANCH -- push the branch first so the tag has something to point at"
-gh release create "$TAGNAME" "$ZIP" ${RECOVERY_ASSET:+"$RECOVERY_ASSET"} --repo "$TARGET" --target "$HEAD_SHA" --title "$TITLE" --notes-file "$NOTES"
+if [ -n "$EXISTING" ]; then
+  gh release view "$TAGNAME" --repo "$TARGET" --json body -q .body > "$NOTES"
+  cat "$SECTION" >> "$NOTES"
+  gh release upload "$TAGNAME" "$ZIP" ${RECOVERY_ASSET:+"$RECOVERY_ASSET"} --repo "$TARGET"
+  gh release edit "$TAGNAME" --repo "$TARGET" --title "$TITLE" --notes-file "$NOTES" >/dev/null
+else
+  # Without --target gh tags the repo's default branch, not the branch this zip came from.
+  git -C "$REPO" fetch -q origin "$BRANCH" 2>/dev/null
+  git -C "$REPO" merge-base --is-ancestor "$HEAD_SHA" "origin/$BRANCH" 2>/dev/null \
+    || die "refusing: HEAD ${HEAD_SHA:0:12} is not on origin/$BRANCH -- push the branch first so the tag has something to point at"
+  gh release create "$TAGNAME" "$ZIP" ${RECOVERY_ASSET:+"$RECOVERY_ASSET"} --repo "$TARGET" --target "$HEAD_SHA" --title "$TITLE" --notes-file "$NOTES"
+fi
 info "published: $(gh release view "$TAGNAME" --repo "$TARGET" --json url -q .url)"

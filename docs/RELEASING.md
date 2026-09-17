@@ -51,10 +51,16 @@ means every user wipes to take the next update. The first signed build installcl
 ./forge/tools/release.sh
 ```
 
+One release per day and branch (tag `<branch>-<date>-<codename>`). Publishing a second preset the
+same day adds its zip and recovery to that release, with its own section in the notes — build it,
+then `release.sh --preset clean`; the audit reads the tree, so build and publish one preset at a
+time. The release must be at the same commit; at any other it is a different build and refused.
+Nothing here replaces or deletes a release.
+
 ## What it publishes
 
-The zip, and from the same build its `recovery.img` (as `<zip name>-recovery.img`), each with its
-sha256 in the notes. The recovery is not optional: on an A-only device the zip does not write the
+Per preset: the zip, and from the same build its `recovery.img` (as `<zip name>-recovery.img`),
+each with its sha256 in the notes. The recovery is not optional: on an A-only device the zip does not write the
 recovery partition, and the zip is signed with keys that only a recovery built alongside it trusts.
 `RELEASE_NO_RECOVERY=1` in `device.conf` for a device whose recovery lives in the boot image (A/B
 with no recovery partition) — the zip carries it, so nothing is published beside the zip.
