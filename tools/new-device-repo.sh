@@ -159,6 +159,9 @@ forge/prebuilt/*.apk
 
 # historical session notes, kept on disk but not published
 archive/
+
+# personal, per-checkout build settings (KEYS_DIR, EXTRA_OPTIONS) -- never published
+/device.conf.local
 EOF
 fi
 

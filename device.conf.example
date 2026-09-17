@@ -41,9 +41,11 @@ COMMON_OPTIONS="nav-icons"
 
 # One build command produces one image. A preset is a saved selection, so the combinations you
 # actually use do not get retyped: `PRESET=clean ./forge/bootstrap.sh`.
+# `libre` is the one release.sh will publish: no Google apps, nothing reclaimed from a manufacturer.
 PRESETS="
-  full    tag=full          options=gapps,root,firefox,fdroid,k9,kdeconnect
   clean   tag=clean         options=
+  libre   tag=libre         options=fdroid,firefox,k9,termoneplus,kdeconnect
+  full    tag=full          options=fdroid,firefox,k9,termoneplus,kdeconnect,gapps,root
 "
 
 # ---- reclaiming a phone's own OEM assets (optional, niche) ----
@@ -63,7 +65,10 @@ PRESETS="
 
 # ---- optional download overrides ----
 #GAPPS_URL=               # a specific GApps zip; overrides the version-derived default
-#FIREFOX_URL=
+# App options (fdroid, firefox, k9, termoneplus, kdeconnect, nextcloud, nextcloud-core) fetch the
+# build F-Droid currently suggests, verified by signing certificate. Pin one to a versionCode only
+# to reproduce a release or hold back a bad update; anything not listed stays on latest.
+#FDROID_PINS="org.mozilla.fennec_fdroid=1550020 com.fsck.k9=39043"
 
 # ---- optional: sub-switches that narrow what an option does ----
 # These mean nothing on their own; they only limit an option this device has enabled.
@@ -85,10 +90,16 @@ PRESETS="
 # ---- signing ----
 # Not here: KEYS_DIR belongs in device.conf.local (gitignored), pointing at a directory outside
 # every repo made by forge/tools/make-keys.sh. Unset -> AOSP test keys, which release.sh refuses.
+# The same file is the place for a personal default option set, so `oem` or `root` never reach the
+# published config:
 #   device.conf.local:  KEYS_DIR=/home/me/keys/rom
+#                       EXTRA_OPTIONS="${EXTRA_OPTIONS-root}"   # an explicit empty env still wins
 
-# ---- release audit exceptions ----
-# forge/tools/release.sh refuses to publish an image containing a file it cannot account for. Each
-# sha256 listed here has been looked at and cleared, with the reason. Never add one to silence an
-# error you have not read.
+# ---- releasing ----
+# forge/tools/release.sh publishes one preset (the first with neither gapps nor oem) as a GitHub
+# release, after auditing the image. See forge/docs/RELEASING.md.
+#RELEASE_NAME=            # release title; default is the codename. Checked against RELEASE_NAME_DENY
+#RELEASE_NO_RECOVERY=1    # A/B device with recovery inside boot.img: publish only the zip
+# release.sh refuses an image containing a file it cannot account for. Each sha256 listed here has
+# been looked at and cleared, with the reason. Never add one to silence an error you have not read.
 #RELEASE_AUDIT_ALLOW=""

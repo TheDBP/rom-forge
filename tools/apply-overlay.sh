@@ -158,6 +158,7 @@ apply_option_prepatch() {
     # a separate step that places it -- which is exactly why the bug stayed invisible.
     ( cd "$AOSP" && FORGE_DIR="$FORGE" OPTION_DIR="$odir" \
         DEVICE="${DEVICE:-}" VENDOR="${VENDOR:-}" DEVICE_SLUG="${DEVICE_SLUG:-}" \
+        FDROID_PINS="${FDROID_PINS:-}" \
         bash "$odir/fetch.sh" "$AOSP" ) \
       || { echo "   !! fetch failed for option $oname"; return 1; }
   fi

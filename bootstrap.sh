@@ -350,7 +350,8 @@ echo ">> [4/5] apply overlay patches"
 # BUILD_OPTIONS goes in so apply-overlay knows which options are on. It needs that because an
 # option's PATCHES modify the tree, and the tree is built once for one image -- so patches for an
 # option this build does not want must not be applied at all.
-LOG_TAG=apply "$AOSP" bash -lc "BUILD_OPTIONS='${BUILD_OPTIONS:-}' /repo/forge/tools/apply-overlay.sh /aosp"
+# FDROID_PINS too: the app fetchers run in there, and a host env var does not cross into docker.
+LOG_TAG=apply "$AOSP" bash -lc "BUILD_OPTIONS='${BUILD_OPTIONS:-}' FDROID_PINS='${FDROID_PINS:-}' /repo/forge/tools/apply-overlay.sh /aosp"
 
 # ---- 4b + 4c: extract OEM assets and Google apps CONCURRENTLY (disjoint dirs) ----
 EXTRACT_PIDS=()
