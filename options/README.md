@@ -141,6 +141,10 @@ patch. The fetcher removes bundle APKs it was not asked for, since each module i
 APK and a stale one would ship. The two are mutually exclusive (`require.sh` checks, and the second
 patch would fail to apply).
 
+Two options that install the same thing must say so in `require.sh`: `firefox` and `fulguris` both
+carry `overrides: ["Jelly"]`, so a build with both would have two modules claiming the stock
+browser's slot. The check costs a line and turns a confusing image into a stopped build.
+
 Because the manifest moves with each fetch, the module cannot mirror its `<uses-library>` list:
 20.0 modules set `LOCAL_ENFORCE_USES_LIBRARIES := false`, 22.2+ `enforce_uses_libs: false`.
 
