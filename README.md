@@ -121,10 +121,12 @@ rather than one per cycle.
 ### 5. Find the result
 
 ```
-build_output/src/out/target/product/<codename>/lineage-*.zip
+build_output/artifacts/<zip name>.zip   (+ -recovery.img, -boot.img, .sha256)
 ```
 
-If you enabled root you also get `boot-magisk.img` beside it.
+That copy survives the next build; the one in `build_output/src/out/target/product/<codename>/` is
+deleted by the next preset's installclean. If you enabled root you also get `boot-magisk.img` in
+`out/`.
 
 ### 6. Flash it
 

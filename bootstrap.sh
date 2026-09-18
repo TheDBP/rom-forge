@@ -398,6 +398,25 @@ if [ -d "$FORGE/modules/linux-chroot" ]; then
   fi
 fi
 
+# Keep the flashable set outside out/: the next preset's installclean deletes every zip there, so
+# a build of `clean` after `cloud` silently costs the cloud zip. Hard links (same filesystem), so
+# free; recovery.img and boot.img travel with the zip they came from, named for it, the way
+# release.sh publishes them. release.sh reads out/ on purpose (it audits the tree); this is for
+# flashing.
+_out="$SRC/out/target/product/$DEVICE_CODENAME"
+_zip="$(ls -t "$_out"/lineage-*-"$DEVICE_CODENAME".zip 2>/dev/null | head -1 || true)"
+if [ -n "$_zip" ]; then
+  _keep="$BUILD_ROOT/artifacts"; mkdir -p "$_keep"
+  _stem="$(basename "${_zip%.zip}")"
+  rm -f "$_keep/$_stem".*
+  ln "$_zip" "$_keep/$_stem.zip" 2>/dev/null || cp "$_zip" "$_keep/$_stem.zip"
+  for _img in recovery boot boot-magisk; do
+    [ -f "$_out/$_img.img" ] && { ln "$_out/$_img.img" "$_keep/$_stem-$_img.img" 2>/dev/null || cp "$_out/$_img.img" "$_keep/$_stem-$_img.img"; }
+  done
+  ( cd "$_keep" && sha256sum "$_stem.zip" > "$_stem.zip.sha256" )
+fi
+
 echo "== DONE =="
 echo "   ROM(s): $SRC/out/target/product/$DEVICE_CODENAME/lineage-*-$DEVICE_CODENAME.zip"
+[ -n "$_zip" ] && echo "   kept:   $BUILD_ROOT/artifacts/$_stem.zip (+ -recovery/-boot/-boot-magisk.img; survives the next build)"
 echo "   Flash in recovery. See the device repo's flashing/ if present."
