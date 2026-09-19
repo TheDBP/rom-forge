@@ -15,6 +15,14 @@ Outer radius 8.175, inner radius 4.825, on a 28dp viewport — the same viewport
 `reference/` holds the same paths as plain SVG so the shapes can be opened and looked at, plus a
 fourth arc (`ic_sysbar_back_ime`, the lower half) that is drawn but not currently wired up.
 
+## Where the overlay lands
+
+`DEVICE_PACKAGE_OVERLAYS` matches on a module's own path, so the same drawable is carried twice:
+once for SystemUI, once for the launcher's quickstep copy. The launcher was renamed on
+lineage-24.0 -- `packages/apps/Trebuchet` became `packages/apps/Launcher3` -- so both paths are
+present. A path that matches nothing on a branch is simply ignored, which is why one tree serves
+every branch; drop neither, or the nav bar goes half-stock on one of them.
+
 ## Why not just extract the originals
 
 The stock art ships at **xxhdpi only**, 49×49 — about 16.3dp, off Android's 24dp icon grid, with no
