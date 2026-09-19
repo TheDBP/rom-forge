@@ -406,7 +406,8 @@ options/              build options -- one capability each, usable on any device
 kernel-configs/       kernel fragments (e.g. container.config)
 kernel-patches/       generic kernel patches applied across devices
 modules/              on-device Magisk modules (linux-chroot)
-prebuilt/             fetchers for Magisk, F-Droid, Firefox, Fulguris, K-9, KDE Connect, TermOne Plus, Nextcloud
+prebuilt/             fetchers for Magisk, F-Droid, Firefox, Fulguris, K-9, KDE Connect, TermOne Plus,
+                      Nextcloud, Linphone, ConnectBot
 GOTCHAS.md            known traps, indexed by symptom
 ```
 

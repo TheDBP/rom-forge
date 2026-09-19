@@ -13,9 +13,10 @@ What it has over Jelly: named sessions (tab groups), a vertical tab panel with d
 recoverable trash, a horizontal tab bar for desktop modes, and an address bar that can sit at the
 bottom.
 
-`firefox` and `fulguris` on one build is an error (`require.sh`): both `overrides: ["Jelly"]`. Pick
-the engine you want -- Fennec is 320 MB staged, Fulguris is 9 MB, and on a device where the first
-does not fit the second is the point.
+This is what the presets carry by default. `firefox` and `fulguris` on one build is an error
+(`require.sh`): both `overrides: ["Jelly"]`. Pick the engine you want -- Fennec is 320 MB staged,
+Fulguris is 9 MB, and on a device where the first does not fit the second is the point. Fennec is
+still there for a device with the room.
 
 ## Shape
 

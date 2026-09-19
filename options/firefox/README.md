@@ -1,5 +1,9 @@
 # firefox
 
+Not the default any more: the example presets carry `fulguris` instead, because Fennec stages
+320 MB against its 9 MB and that is the difference between fitting and not on a smaller device.
+Nothing here has gone away -- put `firefox` back in a preset on a device with the room.
+
 Firefox (Fennec F-Droid, `org.mozilla.fennec_fdroid`) as the browser, replacing Jelly.
 
 The module carries `overrides: ["Jelly"]` / `LOCAL_OVERRIDES_PACKAGES := Jelly`, so exactly one
