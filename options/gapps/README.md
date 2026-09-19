@@ -1,5 +1,14 @@
 # gapps
 
+Two sources, one option. **MindTheGapps** supplies Play Store and GMS Core, built from the manifest
+repo pinned per branch. **NikGapps** supplies the Google app swaps -- Calculator, Calendar, Clock,
+Contacts, Files, Messages, Phone -- extracted from a release zip at sync time.
+
+`WITH_GAPPS_EXTRAS=false` in `device.conf` builds the first without the second, for an Android
+version NikGapps has not released for yet (Android 17, at the time of writing). You get Play Store
+and GMS and keep Lineage's own apps. It is per-device and explicit: the build never infers it, and
+both bootstrap.sh and require.sh say so out loud, because the image is otherwise indistinguishable.
+
 Google apps: Play Store and GMS from MindTheGapps, plus Google's versions of the stock apps.
 
 ## What was device-specific and wasn't

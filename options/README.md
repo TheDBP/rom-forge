@@ -123,9 +123,14 @@ set directly, so nothing downstream needs to know an option was involved.
 ## Sub-switches
 
 A few `WITH_*` values in `device.conf` are not options. They only ever *narrow* what an option does
-and mean nothing on their own — `WITH_LINUX_FHANDLE` and `WITH_LINUX_CGROUP_PATCH` are the two, both
-per-device escapes for a kernel that cannot take part of `linux`. Making them options would imply
-you could enable them without `linux`, which is meaningless.
+and mean nothing on their own. `WITH_LINUX_FHANDLE` and `WITH_LINUX_CGROUP_PATCH` are per-device
+escapes for a kernel that cannot take part of `linux`; `WITH_GAPPS_EXTRAS=false` narrows `gapps` to
+MindTheGapps, for an Android version NikGapps has not released for. Making them options would imply
+you could enable them without their option, which is meaningless.
+
+A sub-switch that removes contents has to announce itself on every build. `gapps` without the app
+swaps produces an image that is correct, tagged the same, and different in the hand -- so both
+bootstrap.sh and the option's `require.sh` print what was dropped rather than passing in silence.
 
 ## App options fetch at build time
 

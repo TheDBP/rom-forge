@@ -275,6 +275,15 @@ if [ "$WANT_OEM" = true ]; then
 fi
 
 GAPPS_DL_URL=""
+# WITH_GAPPS_EXTRAS=false narrows gapps to MindTheGapps: Play Store and GMS from the manifest
+# repo, and none of the Google app swaps, which are what the NikGapps zip supplies. It exists for
+# an Android version NikGapps has not released for yet. Explicit per device, never inferred: a
+# build that quietly drops the swaps looks identical until the phone is in your hand, which is
+# the failure the check below exists for. options/gapps/require.sh reads the same switch.
+if [ "$WANT_GAPPS" = true ] && [ "${WITH_GAPPS_EXTRAS:-true}" != true ]; then
+  echo "   GApps: MindTheGapps only (WITH_GAPPS_EXTRAS=false) -- no Google app swaps"
+  WANT_GAPPS=false
+fi
 if [ "$WANT_GAPPS" = true ]; then
   if [ -n "${GAPPS_ZIP:-}" ]; then
     [ -f "$GAPPS_ZIP" ] || { echo "!! GAPPS_ZIP=$GAPPS_ZIP does not exist" >&2; exit 1; }

@@ -78,6 +78,10 @@ PRESETS="
 #   WITH_LINUX_FHANDLE        dockerd wants CONFIG_FHANDLE, but some devices' VINTF kernel
 #                             requirements forbid it. Set false where the build enforces that.
 #WITH_LINUX_CGROUP_PATCH=true
+# gapps without the Google app swaps: Play Store and GMS from MindTheGapps, Lineage's own
+# Calculator/Calendar/Clock/Contacts/Files/Messages/Phone. For an Android version NikGapps has
+# not released for. The build says so on every run; it is never inferred.
+#WITH_GAPPS_EXTRAS=false
 #WITH_LINUX_FHANDLE=true
 
 # ---- optional: vendored projects (no upstream left to sync) ----
