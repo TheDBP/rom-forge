@@ -27,6 +27,7 @@ Called for you by `bootstrap.sh`, listed here so you know what they are:
 | `apply-overlay.sh` | installs local_manifests, applies the selected options and this device's patches, vendors recovered trees (`VENDORED_PROJECTS`), merges kernel fragments (`KERNEL_EXTRA_CONFIGS`) and kernel patches (`KERNEL_EXTRA_PATCHES`) |
 | `extract-gapps-apps.sh` | matches APKs in a GApps zip by package name via aapt2, stages them as `android_app_import` prebuilts with `overrides:` so they replace the Lineage equivalents |
 | `release.sh` | publishes the redistributable preset and refuses anything else — see [docs/RELEASING.md](../docs/RELEASING.md) |
+| `run-one.sh` | builds one device repo and refuses if another build is already running; timestamped log, one start/finish line for a queue to read |
 | `extract-nextbit-oem-assets.sh` | pulls sounds, wallpapers and the boot animation out of a Nextbit Robin stock ROM (nav-bar icons are the `nav-icons` option, redrawn, not extracted) (`OEM_ASSET_PACK=nextbit-robin`) — see [docs/OEM-ASSETS.md](../docs/OEM-ASSETS.md) |
 | `sync-forge.sh` | vendors `forge/` into a device repo at a pinned commit |
 | `refresh-patches.sh` | regenerates `overlay/patches` from your commits — **clean tree only** (GOTCHAS 14) |
