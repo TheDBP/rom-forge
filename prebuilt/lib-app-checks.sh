@@ -5,9 +5,11 @@
 #   app_require OPT DIR MOD...      before the build
 #   app_post_build OPT DIR MOD...   after it
 #
-# DIR is the option's vendor/lineage/prebuilts/<opt>; each module MOD is DIR/MOD.apk. Native
-# libraries the fetcher unpacked sit in DIR/lib/arm64-v8a/ (one-app options) or
-# DIR/MOD/lib/arm64-v8a/ (bundles).
+# DIR is the option's vendor/lineage/prebuilts/<opt>, or -- on a branch where the option has no
+# vendor/lineage patch and the module is a device-tree one (ether 20.0 firefox/fdroid) -- that
+# device directory, which post-patch.sh has already populated. Each module MOD is DIR/MOD.apk or
+# DIR/MOD/MOD.apk. Native libraries the fetcher unpacked sit in DIR/lib/arm64-v8a/ (one-app
+# options) or DIR/MOD/lib/arm64-v8a/ (bundles).
 #
 # require: every APK present (each module is guarded on its APK, so a missing one is a silently
 # smaller image, not an error); the module file present and naming every module (Android.mk from
@@ -22,6 +24,10 @@
 # <app>/lib/arm64/<lib>.so, or the app dies at launch in UnsatisfiedLinkError.
 set -o pipefail
 
+_app_apk() {  # DIR MOD -> the APK, flat or in its own subdirectory
+  if [ -f "$1/$2.apk" ]; then echo "$1/$2.apk"; else echo "$1/$2/$2.apk"; fi
+}
+
 _app_libdir() {  # DIR MOD -> where the fetcher unpacked this module's libraries, if anywhere
   [ -d "$1/$2/lib/arm64-v8a" ] && { echo "$1/$2/lib/arm64-v8a"; return; }
   [ -d "$1/lib/arm64-v8a" ] && echo "$1/lib/arm64-v8a"
@@ -29,7 +35,7 @@ _app_libdir() {  # DIR MOD -> where the fetcher unpacked this module's libraries
 
 app_require() {
   local opt="$1" dir="$2" mod modfile missing=""; shift 2
-  for mod in "$@"; do [ -f "$dir/$mod.apk" ] || missing="$missing $mod"; done
+  for mod in "$@"; do [ -f "$(_app_apk "$dir" "$mod")" ] || missing="$missing $mod"; done
   [ -z "$missing" ] || {
     echo "!! $opt: missing in ${dir#"$AOSP"/}:$missing" >&2
     echo "!!     each module is guarded on its APK, so the build would ship without it. Run the option's" >&2
@@ -56,7 +62,7 @@ app_post_build() {
   local opt="$1" dir="$2" mod src apk lib libdir rc=0; shift 2
   local out="$AOSP/out/target/product/${DEVICE_CODENAME:?DEVICE_CODENAME unset and device.conf not found}"
   for mod in "$@"; do
-    src="$dir/$mod.apk"
+    src="$(_app_apk "$dir" "$mod")"
     apk="$(find "$out" -name "$mod.apk" -path '*app*' -not -path '*/obj/*' 2>/dev/null | head -1)"
     [ -n "$apk" ] || { echo "!! $opt: no $mod.apk in the built image"; rc=1; continue; }
     [ -f "$src" ] || { echo "   $opt: $mod: no fetched copy to compare against, skipping"; continue; }
