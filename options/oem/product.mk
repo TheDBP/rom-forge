@@ -9,6 +9,16 @@ forge_oem_sounds := $(wildcard vendor/extra/oem-assets/sounds/media/audio/*/*.og
 PRODUCT_COPY_FILES += $(foreach f,$(forge_oem_sounds),\
     $(f):$(TARGET_COPY_OUT_SYSTEM)/media/audio/$(patsubst vendor/extra/oem-assets/sounds/media/audio/%,%,$(f)))
 
+# system/media/audio belongs to generic_system.mk, which from Android 17 enforces that ownership:
+# a device makefile adding files there fails the build (artifact_path_requirements.mk) unless they
+# are named as allowed. Reclaimed sounds are exactly that case. Harmless on older branches, which
+# have the same variable and simply never check it.
+PRODUCT_ARTIFACT_PATH_REQUIREMENT_ALLOWED_LIST += \
+    system/media/audio/alarms/% \
+    system/media/audio/notifications/% \
+    system/media/audio/ringtones/% \
+    system/media/audio/ui/%
+
 # Wallpapers -> /product/media/wallpaper as raw files, plus the Backgrounds picker entries that make
 # them selectable. Without the overlay they ship but cannot be chosen.
 forge_oem_wallpaper := $(wildcard vendor/extra/oem-assets/wallpaper/*.png)
