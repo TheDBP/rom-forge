@@ -14,7 +14,16 @@ causes one at a time, several of which were predictable before the first build.
 
 # 3. C/C++ constants the new branch removed but the device tree still uses.
 ./tools/find-removed-platform-symbols.sh <OLD_SRC> <NEW_SRC> device/<vendor>/<codename>
+
+# 4. Soong namespaces the device must now import (and shadowing order), modules and HIDL libraries
+#    the branch deleted -- including what the proprietary blobs are linked against -- and makefile
+#    paths that moved. Each hit is one Soong analysis failure, ~20 min apiece on a 24.0 tree.
+EXTRA_TREES="vendor/<vendor>/<sibling>" ./tools/find-soong-namespace-drift.sh <OLD_SRC> <NEW_SRC> device/<vendor>/<codename> [<OLD_SRC>/device/<vendor>/<codename>]
 ```
+
+Namespace fixes go in BOTH places: `PRODUCT_SOONG_NAMESPACES` in the device .mk and `imports:` in
+the device `Android.bp`. Order matters when two namespaces define the same module name -- root and
+namespace searches take the first match in list order.
 
 Then build with `KEEP_GOING=true` and triage the whole error surface at once:
 

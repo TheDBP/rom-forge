@@ -12,6 +12,7 @@ container.
 | `check-platform-support.sh` | before porting | what upstream no longer gives this SoC — the cheapest, most predictive check |
 | `find-orphaned-sepolicy-types.sh` | before porting | SELinux types the device references that the new branch deleted |
 | `find-removed-platform-symbols.sh` | before porting | C/C++ platform constants it lost |
+| `find-soong-namespace-drift.sh` | before porting | Soong namespaces the device must now import, modules and HIDL libraries the branch deleted (including what the blobs link against), makefile paths that moved |
 | `triage-build-log.sh` | after a failed build | a wall of errors collapsed into a few classes |
 | `check-image-labels.sh` | when packaging fails | every unlabeled path at once, instead of one per build |
 | `unpack-block-ota.sh` | when flashing | partition images out of a `payload.bin` OTA, for fastboot-only flashing |
@@ -52,6 +53,10 @@ must be on disk. Keep the old tree until the port lands.
 
 # Which C/C++ constants did it lose?
 ./tools/find-removed-platform-symbols.sh <OLD_SRC> <NEW_SRC> device/<vendor>/<codename>
+
+# Which namespaces, modules, blob dependencies and include paths did it move or delete?
+# (OLD tree's device dir as 4th arg when NEW_SRC has no synced device tree yet; EXTRA_TREES for sibling blob dirs)
+EXTRA_TREES="vendor/<vendor>/<sibling>" ./tools/find-soong-namespace-drift.sh <OLD_SRC> <NEW_SRC> device/<vendor>/<codename> [<OLD_SRC>/device/<vendor>/<codename>]
 ```
 
 Each `[OUT]` gate means the device no longer gets whatever that block configures. The three outputs
@@ -93,6 +98,7 @@ What the tools report, on a real port:
 | `check-platform-support.sh` | `device/qcom/sepolicy-legacy/SEPolicy.mk` no longer lists `msm8992`, so the whole legacy qcom vendor policy is gone. Also flags the inverted `BOARD_SEPOLICY_M4DEFS` gate — the reason importing a newer vendor policy trips AOSP neverallows. |
 | `find-orphaned-sepolicy-types.sh` | `adsprpcd_file`, `qdisplay_service`, `sysfs_graphics`, `perfd`, `debugfs_rmt`, `time_data_file`, … — six build cycles' worth, in one pass. |
 | `find-removed-platform-symbols.sh` | AOSP 12 dropped the vendor section of `system/camera.h`; the bundled QCamera2 HAL uses eight of those constants. |
+| `find-soong-namespace-drift.sh` | 22.2→24.0 on a Pixel 3a: five `hardware/google/pixel/*` subdirs became namespaces the device never imported; `hardware/qcom/wlan` gained a namespace that shadows the imported `legacy` one; dumpstate 1.1, health.storage 1.0, `hardware.google.light@1.0-service`, `check_dynamic_partitions`, `disable_configstore` gone; the fingerprint blob links `android.frameworks.stats@1.0`, deleted; `vendor/lineage/config/device_framework_matrix.xml` moved. Seven build cycles, one pass. |
 | `triage-build-log.sh` | 274 edges → `BUILD_BROKEN_ELF_PREBUILT_PRODUCT_COPY_FILES` + a kernel toolchain flag. |
 
 ## Fixing what they find
