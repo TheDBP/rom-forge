@@ -61,27 +61,17 @@ flip — backport FFS AIO, or restore a blocking path in adbd.
 **Wireless adb is unaffected** — plain TCP, never touches FunctionFS. On an old-kernel device it is
 the cheaper route, but networking has to work first.
 
-If USB adb is viable, two things block it:
+If USB adb is viable, two things block it: `sys.usb.config` stays `none` until the framework sets
+it, and on `userdebug` `ro.adb.secure=1` needs a prompt the framework never draws. The `bringup`
+option (`forge/options/bringup/`) clears both from the build config — `WITH_ADB_INSECURE` (adb.secure
+0, device stays debuggable, adb on USB from init) and `persist.logd.logpersistd=logcatd` (every
+buffer kept under `/data/misc/logd/`, `adb shell logpersist.cat` to read it). Enable it per build
+with `EXTRA_OPTIONS="bringup"` in `device.conf.local`; the tag gains `-bringup`.
 
-**adbd never starts.** `sys.usb.config` stays `none` until the framework sets it, and a crashing
-system_server never gets there.
+Don't use `PRODUCT_ADB_KEYS` instead. It puts a personal `adbkey.pub` (`user@host` inside) in the
+repo, and it is redundant once `ro.adb.secure=0`.
 
-```make
-PRODUCT_PROPERTY_OVERRIDES += persist.sys.usb.config=adb
-```
-
-**adb wants authorisation.** On `userdebug` `ro.adb.secure=1`, and a crashing system_server cannot
-draw the prompt. Ship your host key:
-
-```make
-PRODUCT_ADB_KEYS := device/<vendor>/<codename>/adb_keys.pub
-```
-
-Copy `~/.android/adbkey.pub` there. Gated to `eng`/`userdebug` in `product_config.mk`, so it cannot
-leak into a `user` build.
-
-> Mark that patch TEMPORARY and revert before distributing. It grants one machine adb access to every
-> device running the build.
+> An image built with `bringup` accepts adb from any host. Never distribute one.
 
 ```sh
 adb wait-for-device logcat -b all > loop.txt
