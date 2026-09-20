@@ -75,10 +75,12 @@ if [ ! -d "$DEVICE_REPO/forge" ]; then
 fi
 
 # SOONG_MEM_LIMIT caps soong_build's Go heap (GOMEMLIMIT). Analysis is ONE process whose peak is
-# set by the size of the build graph, not by JOBS -- on a 24.0 tree it reaches ~24 GB, which is
-# most of a 32 GB machine, and the box then swaps through a phase no job count can shrink. Go's
-# soft limit makes its GC work harder instead of growing the heap: cheaper than thrashing, as
-# long as the limit stays above the live set or the GC spirals. Leave unset to let it grow.
+# set by the size of the build graph, not by JOBS -- on a 24.0 tree the live graph is ~30 GB and
+# Go's default GC lets the heap reach twice that, which is a 32 GB machine plus all of its swap.
+# The soft limit makes the GC work harder instead of growing the heap; above the limit Go caps GC
+# at half the CPU, so it degrades rather than spirals. Leave unset to let it grow.
+# soong_ui runs soong_build under `env -i`: this variable only arrives if
+# patches/<branch>/build/soong carries the forwarding patch (apply-overlay step 0).
 GOMEM_ENV=()
 [ -n "${SOONG_MEM_LIMIT:-}" ] && GOMEM_ENV=(-e "GOMEMLIMIT=$SOONG_MEM_LIMIT")
 

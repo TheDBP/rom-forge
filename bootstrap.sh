@@ -8,8 +8,9 @@
 #   JOBS=8  SYNC_JOBS="4 2 1"  BUILD_ROOT=/path  # overrides
 #   SOONG_MEM_LIMIT=20GiB                        # cap soong_build's heap on a small machine
 # JOBS sizes the COMPILE phase. It does nothing for analysis: soong_build is one process whose
-# peak is set by the build graph (~24 GB on a 24.0 tree), so on a 32 GB box the fix is
-# SOONG_MEM_LIMIT, not a lower JOBS.
+# peak is set by the build graph (~30 GB live on a 24.0 tree, 60 GB at the Go default of a 2x
+# heap), so on a 32 GB box the fix is SOONG_MEM_LIMIT, not a lower JOBS. It only reaches
+# soong_build through patches/<branch>/build/soong (soong_ui starts it with `env -i`).
 # OEM builds (the oem option) need a stock ROM: STOCK_ROM=path, a zip matching STOCK_ROM_GLOB, or STOCK_ROM_URL.
 set -euo pipefail
 

@@ -195,6 +195,15 @@ for _vp in ${VENDORED_PROJECTS:-}; do
   echo ">> vendored ${_vp%%:*} -> ${_vp#*:} (git-initialised for patching)"
 done
 
+# ---- 0. engine patches: forge/patches/<branch>/<project> -- every device, every preset ----------
+# Build-system fixes that are about the machine, not the phone (soong_ui memory plumbing). Branch-
+# scoped like every other patch; a branch with no directory here gets nothing.
+if [ -d "$FORGE/patches/${BRANCH:-}" ]; then
+  for proj in $(cd "$FORGE/patches/$BRANCH" && find . -name '*.patch' -printf '%h\n' | sed 's#^\./##' | sort -u); do
+    apply_project_from "$FORGE/patches/$BRANCH" "$proj" "engine" || exit 1
+  done
+fi
+
 # ---- 1a. enabled options: patches and fetches (before device patches) ----
 for _o in ${BUILD_OPTIONS:-}; do apply_option_prepatch "$_o" || exit 1; done
 
