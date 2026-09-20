@@ -25,6 +25,11 @@ Namespace fixes go in BOTH places: `PRODUCT_SOONG_NAMESPACES` in the device .mk 
 the device `Android.bp`. Order matters when two namespaces define the same module name -- root and
 namespace searches take the first match in list order.
 
+Pre-5.10 kernel on lineage-24.0: the branch removed GCC-assisted kernel builds and their binutils
+prebuilts. Check `patches/README.md` for the engine patch and the two manifest projects the device
+must add; without them the first symptom is `media/msm_media_info.h: file not found` two hours into
+the compile, not a kernel error.
+
 Then build with `KEEP_GOING=true` and triage the whole error surface at once:
 
 ```sh
