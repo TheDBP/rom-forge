@@ -43,6 +43,15 @@ on USB and nothing in klog). Read init's `Command '...' failed:` line, not the `
 line after it: "failed to start due to a fatal error" is the forked child giving up before exec.
 `tools/README.md`, *Bringing a kernel up*.
 
+Stuck on the OEM logo with no USB, and the console ring shows services restarting, is the next
+stage: init is fine, userspace aborts. The reasons are not in kmsg. Read `pmsg-ramoops-0` from the
+same pull (`pstore-pull.sh` decodes it): it is the last boot's logcat, tombstones included, and
+the phone has no adb to `logcat -L` with. Several vendor HALs failing on `Permission denied` for
+their `/dev` nodes with no `avc:` line anywhere is DAC, i.e. ueventd never applied the vendor
+rules — Android 17 reads `/system/etc/ueventd.rc` only, and the vendor file has to be at
+`/vendor/etc/ueventd.rc` for its `import` (system/core `1b926a344` dropped the legacy
+`/vendor/ueventd.rc` path that pre-T `first_api_level` devices were still using).
+
 ## Why pstore misleads
 
 pstore survives a reboot but not a cold power-off, and the pmsg ring is 256K–512K

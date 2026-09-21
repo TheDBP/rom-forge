@@ -28,7 +28,7 @@ ADB=(adb); [ -n "$SER" ] && ADB=(adb -s "$SER")
 mkdir -p "$OUT"
 
 "${ADB[@]}" root >/dev/null 2>&1; sleep 1
-"${ADB[@]}" wait-for-any-device
+"${ADB[@]}" wait-for-any-any
 "${ADB[@]}" shell 'mount | grep -q " /sys/fs/pstore " || mount -t pstore pstore /sys/fs/pstore' >/dev/null 2>&1
 files="$("${ADB[@]}" shell 'ls /sys/fs/pstore/ 2>/dev/null' | tr -d '\r')"
 if [ -z "$files" ]; then
@@ -38,6 +38,9 @@ else
     "${ADB[@]}" exec-out cat "/sys/fs/pstore/$f" > "$OUT/$f"
     printf '%-24s %8d bytes  %s\n' "$f" "$(stat -c %s "$OUT/$f")" \
       "$(grep -a -m1 -oE 'Linux version [^ ]+' "$OUT/$f" || true)"
+    case "$f" in pmsg-*)   # last boot's logcat + tombstones, see pmsg-decode.py
+      python3 "$(dirname "$0")/pmsg-decode.py" "$OUT/$f" "$OUT/$f.txt" && echo "  -> $f.txt";;
+    esac
   done
 fi
 

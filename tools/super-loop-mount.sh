@@ -22,7 +22,7 @@ SRC="${ANDROID_SRC:-$PWD/build_output/src}"; HB="${HOST_BIN:-$SRC/out/host/linux
 [ -x "$HB/lpdump" ] || { echo "!! no lpdump in $HB (set HOST_BIN)" >&2; exit 1; }
 W="$PWD/.super-loop-mount"; mkdir -p "$W"
 
-"${ADB[@]}" root >/dev/null 2>&1; sleep 1; "${ADB[@]}" wait-for-any-device
+"${ADB[@]}" root >/dev/null 2>&1; sleep 1; "${ADB[@]}" wait-for-any-any
 suffix="$("${ADB[@]}" shell getprop ro.boot.slot_suffix | tr -d '\r')"
 superp="$("${ADB[@]}" shell getprop ro.boot.super_partition | tr -d '\r')"
 DEV="${SUPER_DEV:-}"
