@@ -31,6 +31,30 @@ forge_all_options() {
 # makefile tests cannot drift apart.
 forge_option_switch() { printf 'WITH_%s' "$(printf '%s' "$1" | tr 'a-z-' 'A-Z_')"; }
 
+# Export an option's build-env into the make environment: VAR=value lines, one per line, exported
+# when the option is on and unset when it is off (so a build without the option does not inherit
+# them from the caller's shell). This is for variables a makefile tests at parse time -- ifdef
+# WITH_ADB_INSECURE in vendor/lineage/config/common.mk. Setting such a variable in product.mk does
+# nothing: inherit-product only records the path, and vendor/extra/product.mk is read after
+# common.mk has finished. Environment variables are visible to every makefile from the start.
+forge_export_option_env() {
+  local o sw f kv
+  for o in $(forge_all_options); do
+    f="${FORGE_DIR:?FORGE_DIR unset}/options/$o/build-env"
+    [ -f "$f" ] || continue
+    sw="$(forge_option_switch "$o")"
+    while IFS= read -r kv || [ -n "$kv" ]; do
+      kv="${kv%%#*}"; kv="${kv%"${kv##*[![:space:]]}"}"
+      [ -n "$kv" ] || continue
+      case "$kv" in
+        [A-Za-z_]*=*) ;;
+        *) echo "!! $f: not VAR=value: $kv" >&2; return 1 ;;
+      esac
+      if [ "${!sw:-}" = true ]; then export "$kv"; else unset "${kv%%=*}"; fi
+    done < "$f"
+  done
+}
+
 # The raw row for a preset, comments stripped. Empty output + non-zero if there is no such preset.
 _forge_preset_row() {
   local want="$1" line first

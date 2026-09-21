@@ -11,6 +11,8 @@ export USE_CCACHE=1 CCACHE_DIR=/ccache
 DEVICE_REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 [ -f "$DEVICE_REPO/device.conf" ] && source "$DEVICE_REPO/device.conf"
 : "${LUNCH_TARGET:?device.conf missing or LUNCH_TARGET unset}"
+FORGE_DIR="$DEVICE_REPO/forge"; export FORGE_DIR
+source "$FORGE_DIR/lib/presets.sh"
 if [ -z "${JOBS:-}" ]; then
   _cores="$(nproc)"; _ramgb="$(awk '/MemAvailable/{print int($2/1048576)}' /proc/meminfo 2>/dev/null || echo 8)"
   _ramjobs=$(( _ramgb / 2 )); [ "$_ramjobs" -lt 1 ] && _ramjobs=1
@@ -23,6 +25,7 @@ for kv in $(cat out/.turbo_config); do
     WITH_*) export "$kv" ;;
   esac
 done
+forge_export_option_env || exit 1
 echo "=== options: $(tr ' ' '\n' < out/.turbo_config | grep '^WITH_' | tr '\n' ' ') ==="
 source build/envsetup.sh
 lunch "$LUNCH_TARGET" || exit 1

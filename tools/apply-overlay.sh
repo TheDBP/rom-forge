@@ -139,7 +139,7 @@ apply_option_prepatch() {
     # device tree already builds it and the option only needs to fetch the APKs. An option that can
     # do NOTHING on this branch is the real error; one that does less is a legitimate shape.
     local _can=0
-    for _part in fetch.sh product.mk assets.list tree require.sh post-patch.sh post-build.sh local_manifests; do
+    for _part in fetch.sh product.mk build-env assets.list tree require.sh post-patch.sh post-build.sh local_manifests; do
       [ -e "$odir/$_part" ] && _can=1
     done
     if [ "$_can" = 0 ]; then

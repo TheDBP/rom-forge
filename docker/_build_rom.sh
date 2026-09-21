@@ -55,6 +55,7 @@ build_one() {
   for _o in $(forge_all_options); do
     _sw="$(forge_option_switch "$_o")"; OPT_FP="$OPT_FP $_sw=${!_sw}"
   done
+  forge_export_option_env || return 1
   echo "=== options:${OPT_FP:- none} ==="
   # KEEP_GOING=true -> mka -k: do not stop at the first error. A port onto a new branch fails in
   # clusters, and stopping at error #1 means one build cycle (30+ min here) per fix. With -k a

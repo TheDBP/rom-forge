@@ -24,6 +24,7 @@ forge/options/<name>/
     assets.list          file copies and removals
     tree/                files staged verbatim into the AOSP tree
     product.mk           makefile fragment; the generator wraps it in the ifeq
+    build-env            VAR=value lines exported into the build environment while the option is on
     require.sh           checked before the build; non-zero stops it
     post-patch.sh        run after device patches; place files a patch just created a home for
     post-build.sh        run after a successful build; non-zero fails it
@@ -77,6 +78,12 @@ every device and every branch **with no patch to anything**.
 Only the selected options are staged (`vendor/extra` is wiped first), and each is then gated again
 at build time by its `WITH_*` variable. What is available is a forge question; what is switched on
 is a per-build question, and they should not be the same question.
+
+A variable that a makefile tests with `ifdef` at parse time (`WITH_ADB_INSECURE` in
+`vendor/lineage/config/common.mk`) cannot be set from `product.mk`: `inherit-product` only records
+the path, and `vendor/extra/product.mk` is read after `common.mk` has finished. Put it in
+`build-env` instead; `_build_rom.sh` and `_build_target.sh` export those lines when the option is
+on and unset them when it is off.
 
 ## The switch name is derived, never declared
 
