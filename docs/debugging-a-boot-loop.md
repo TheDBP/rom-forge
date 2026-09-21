@@ -32,6 +32,17 @@ for f in tombstone_[0-9]*; do case "$f" in *.pb) continue;; esac
 done | sort | uniq -c | sort -rn
 ```
 
+## Nothing reaches the boot animation
+
+That is a different problem from a loop: init dies before `zygote`. USB never enumerates, and on a
+device whose bootloader hard-resets and rewrites the ramoops region on every boot, pstore is empty.
+The order there is `tools/init-harness.sh` (bionic → `selinux_setup`, from recovery, no boot), then
+`tools/dtbo-ramoops-alt.py` + `tools/pstore-pull.sh` for `early-init` onwards (cgroups,
+`apexd-bootstrap` — its `reboot_on_failure` is a clean `reboot bootloader` ~10 s in, with nothing
+on USB and nothing in klog). Read init's `Command '...' failed:` line, not the `exited with status`
+line after it: "failed to start due to a fatal error" is the forked child giving up before exec.
+`tools/README.md`, *Bringing a kernel up*.
+
 ## Why pstore misleads
 
 pstore survives a reboot but not a cold power-off, and the pmsg ring is 256K–512K

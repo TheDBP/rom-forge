@@ -39,6 +39,18 @@ KEEP_GOING=true JOBS=<n> PRESET=clean ./forge/bootstrap.sh
 
 Fixing one error per 30-minute cycle is the default failure mode of a port. Don't.
 
+## The kernel gate, once it builds
+
+A userspace two or more releases newer than the kernel fails in init, one missing kernel feature at
+a time, and each one looks the same from outside: nothing on USB, back in the bootloader. Take them
+as a list, one backport per flash, and never find them with normal boots (each burns a slot retry
+and, on bootloaders that hard-reset, leaves no log). Tools in `tools/README.md`, *Bringing a kernel
+up*: `check-bpf-objects.py` first (static), `hybrid-bootimg.sh` + `init-harness.sh` for bionic →
+`selinux_setup`, `dtbo-ramoops-alt.py` + `pstore-pull.sh` for `early-init` onwards,
+`kernel-rebuild.sh --am` to get each patch onto hardware in 20 minutes. Known items for a 4.9 kernel
+on Android 17 so far: `MADV_WIPEONFORK` (bionic aborts), the Android-only avtab M-compat shim
+(`nlmsg` xperms), `cpuset_v2_mode` (libprocessgroup mounts cpuset with it, no fallback), then eBPF.
+
 ## The pattern that costs the most time
 
 **A newer branch drops legacy platforms from a filter, and the failure never points at the filter.**

@@ -38,6 +38,21 @@ Called for you by `bootstrap.sh`, listed here so you know what they are:
 | `check-hal-readiness.sh` | HALs the manifest declares with nothing to serve them — finds them before a build-flash-boot cycle does |
 | `check-bpf-readiness.sh` | what a kernel without eBPF (or other modern syscalls) will break; `--src` scans code, `--log` reads what the device actually got |
 | `propagate-forge.sh` | pushes an engine change out to every device repo beside this one, fast-forwarding each branch to its remote first |
+| `kernel-rebuild.sh` | boot image only, ~20 min, with the last full build's exact option set (`out/.turbo_config`) so `out/` neither reconfigures nor installcleans; `--am <patch>` puts an overlay kernel patch on the live tree first |
+
+Bringing a kernel up to a newer branch (the *kernel gate* of a port — see
+[docs/porting-a-branch-bump.md](../docs/porting-a-branch-bump.md)), in the order you reach for them:
+
+| tool | run it | what you get |
+|---|---|---|
+| `check-bpf-objects.py` | before the first boot, on the built `.o` files | every BPF map/program/helper the old kernel cannot load, with the kver-gated ones marked skipped |
+| `hybrid-bootimg.sh` | before the first boot | new kernel + old *recovery* ramdisk: recovery/fastbootd on the candidate kernel, so the phone stays reachable |
+| `init-harness.sh` | from that recovery | the new ramdisk's `/init` run as PID 1 of a throwaway pidns on the live kernel; each FATAL in kmsg is a gap, no slot-retry burnt. Covers bionic → `selinux_setup` → start of second stage |
+| `dtbo-ramoops-alt.py` | for anything past that | a debug dtbo whose live ramoops ring survives a clean reboot; normal-boot, then read it from recovery — the only way to see `early-init` die (cgroups, apexd-bootstrap) on a device whose bootloader wipes pstore |
+| `pstore-pull.sh` | from recovery, after | every pstore record, plus the raw ring unrolled if the kernel did not expose it |
+| `pixel-ramoops-pull.sh` | Pixel 3/3a class, after a *panic* | the encrypted klog the bootloader saved, decrypted with your own key |
+| `super-loop-mount.sh` | from recovery | a logical partition of the inactive slot mounted rw without device-mapper — edit `init.rc`, push a binary, chroot into it |
+| `usb-watch.sh` | during a boot attempt | timestamped USB/adb/fastboot transitions: how long until the bootloader, whether adbd ever appeared |
 
 ## Assessing a port
 
