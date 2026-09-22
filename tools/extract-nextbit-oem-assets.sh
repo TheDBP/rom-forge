@@ -89,10 +89,22 @@ if [ -d "$TMP/system/media/audio" ]; then
   kept=0; skipped=0
   while IFS= read -r -d '' f; do
     rel="${f#"$TMP"/system/media/audio/}"
-    if grep -qxF "$(sha256sum "$f" | awk '{print $1}')" "$ref_sha" \
-       || grep -qxF "$(basename "$f")" "$ref_name"; then
-      skipped=$((skipped+1)); continue          # already in Lineage -> would be a duplicate
+    # Content match means a real duplicate wherever it lives. A name match only means duplicate
+    # for ringtones/notifications/alarms, where the filename is the tune's title and the same
+    # title re-encoded is still the same tune. Under ui/ the name is a FUNCTION -- Effect_Tick is
+    # "the click", ChargingStarted is "the charging sound" -- so a stock file sharing the name is
+    # the manufacturer's own version of that sound, which is the whole point of this option.
+    # Dropping those by name cost the Robin its entire UI set: click, keypresses, lock/unlock,
+    # camera shutter and charging, 15 files, while its uniquely named ones came through.
+    if grep -qxF "$(sha256sum "$f" | awk '{print $1}')" "$ref_sha"; then
+      skipped=$((skipped+1)); continue          # identical content -> a real duplicate
     fi
+    case "$rel" in
+      ui/*) ;;                                  # keep: same name, different sound
+      *) if grep -qxF "$(basename "$f")" "$ref_name"; then
+           skipped=$((skipped+1)); continue     # same title -> the same tune re-encoded
+         fi ;;
+    esac
     mkdir -p "$OEM/sounds/media/audio/$(dirname "$rel")"
     cp -a "$f" "$OEM/sounds/media/audio/$rel"; kept=$((kept+1))
   done < <(find "$TMP/system/media/audio" -name '*.ogg' -print0)
