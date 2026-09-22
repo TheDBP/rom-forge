@@ -9,7 +9,7 @@
 # read one. A third-party build for the same device on your target branch is ground truth for the
 # SELinux policy, the prop set, and the blob list -- worth far more than guessing from source. This
 # unpacks the old-style block OTA (system.new.dat[.br] + system.transfer.list) that A-only devices
-# still ship; for A/B payload.bin OTAs use payload-dumper instead.
+# still ship; for A/B payload.bin OTAs use ota-extract.sh instead.
 #
 # Needs: brotli (AOSP builds one at out/host/linux-x86/bin/brotli), python3, and debugfs (e2fsprogs)
 # if you want to list or extract files afterwards.
@@ -31,7 +31,7 @@ unzip -o -q "$ZIP" "$DAT.br" "$LIST" 2>/dev/null || unzip -o -q "$ZIP" "$DAT" "$
 if [ -f "$DAT.br" ]; then
   BROTLI="${BROTLI:-$(command -v brotli || true)}"
   if [ -z "$BROTLI" ]; then
-    BROTLI=$(ls /*/*/*/build_output/src/out/host/linux-x86/bin/brotli 2>/dev/null | head -1 || true)
+    BROTLI=$(ls /*/*/*/build_output/src/out/host/linux-x86/bin/brotli 2>/dev/null | sed -n 1p || true)
   fi
   [ -n "$BROTLI" ] || { echo "!! need brotli; set BROTLI=/path/to/brotli" >&2; exit 1; }
   echo ">> brotli -d $DAT.br"

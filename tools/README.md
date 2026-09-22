@@ -15,6 +15,8 @@ container.
 | `find-soong-namespace-drift.sh` | before porting | Soong namespaces the device must now import, modules and HIDL libraries the branch deleted (including what the blobs link against), makefile paths that moved |
 | `triage-build-log.sh` | after a failed build | a wall of errors collapsed into a few classes |
 | `check-image-labels.sh` | when packaging fails | every unlabeled path at once, instead of one per build |
+| `ota-extract.sh` | when you need a reference ROM | partitions out of a signed A/B OTA, and optionally flashed to one slot so you can keep a known-good build on the inactive slot |
+| `blob-attach.sh` | when a prebuilt HAL crashes | a vendor binary under `lldb-server` with its library load base printed, so absolute breakpoints work in a stripped blob |
 | `unpack-block-ota.sh` | when flashing | partition images out of a `payload.bin` OTA, for fastboot-only flashing |
 | `check-sigpipe.sh` | before committing | pipelines that will die silently under `set -o pipefail` |
 | `dev-shell.sh` | any time | an interactive shell in the build container |

@@ -1,0 +1,136 @@
+# Debugging a vendor blob
+
+For the case where a prebuilt HAL worked on the old branch and crashes on the new one, with the
+same blob, the same device and the same config. [docs/debugging-a-boot-loop.md](debugging-a-boot-loop.md)
+covers getting a device to boot at all; this is the next layer down, when something boots but one
+subsystem is dead and the logs do not explain it.
+
+The worked example throughout is a camera HAL that segfaulted on lineage-24.0 and worked on 22.2.
+
+## Get a reference before you theorise
+
+Park the old branch on the inactive slot and boot it. Same phone, same blob, one variable changed.
+
+```
+tools/ota-extract.sh lineage-22.2-....zip /path/scratch --flash a --os-only
+fastboot set_active a && fastboot reboot
+```
+
+`/data` is shared between slots, so anything you enable there — rooted debugging, `persist.*`
+properties — carries across both ROMs. Switch back with `fastboot set_active b`. Keep the rig:
+you will want to re-measure on the working side several times.
+
+If the old branch is *also* broken, stop. You are not looking at a regression and the rest of this
+does not apply.
+
+## Logs will lie to you by being identical
+
+Turn logging up on both sides and diff them. For CamX that is
+`persist.vendor.camera.log{Info,Verbose,Warning}Mask=0xFFFFFFFF` by `setprop`, or
+`/vendor/etc/camera/camxoverridesettings.txt`. Other stacks have their own switch.
+
+Expect this to fail to find anything, and know what that means. In the worked example every
+message matched line for line — module count, probe results, calibration values — right up to the
+fault. **That is a finding, not a dead end.** If two builds log the same thing and behave
+differently, no state the blob prints is wrong, and the difference is in something it does not
+print: a register, a struct size, a pointer.
+
+Two traps while diffing:
+
+- Addresses in log lines are ASLR, not data. "EEPROM rawData: 0x7 0faeb4f30" differing between runs
+  means nothing.
+- Capture from the moment adb appears, not `logcat -d` afterwards. A busy boot rotates the buffer
+  and you will "discover" that early messages are missing on one side only.
+
+## Then go to the registers
+
+Attach and read the crash frame. `tools/blob-attach.sh` starts the binary under `lldb-server` and
+prints the library load base, because lldb's gdbserver mode does not track shared libraries: no
+symbolic breakpoint ever resolves, and bionic randomises the base regardless of
+`kernel.randomize_va_space`. Absolute addresses are all you have and they move every run.
+
+Symbols are usually still there even in a stripped blob, compressed in `.gnu_debugdata`:
+
+```
+llvm-objcopy --dump-section .gnu_debugdata=dbg.xz <blob> /dev/null && xz -d dbg.xz
+llvm-nm -C dbg | grep <address>
+```
+
+`target modules add <local copy>` also gets lldb to read them, which is how you turn a bare address
+into `CamX::ImageSensorUtils::ReadSensorCalibration(...)`.
+
+Disassemble once, to a file, and work from it:
+
+```
+llvm-objdump -d <blob> > blob.dis
+```
+
+## Walking frames by hand
+
+lldb cannot recover callee-saved registers in outer frames without unwind info, so read them off
+the stack. Take the prologue of the frame you care about:
+
+```
+stp x29, x30, [sp, #-0x60]!     ; sp -= 0x60
+stp x24, x23, [sp, #0x30]       ; x24 at x29+0x30, x23 at +0x38
+stp x20, x19, [sp, #0x50]       ; x20 at x29+0x50, x19 at +0x58
+mov x29, sp
+```
+
+then walk the frame pointer chain: `[x29]` is the caller's `x29`, `[x29+8]` its return address.
+Confirm each hop by checking the return address lands where you expect
+(`lr - load_base` = a file offset you can look up in `blob.dis`). Read the saved register out of
+the frame you reached.
+
+`memory read` refuses over 1024 bytes without `--force`.
+
+## Bisect the call that breaks it
+
+If a value is right on entry to a function and wrong later, and the function never reassigns it —
+check that, with `grep` over the disassembly of the whole function — then a callee is clobbering a
+callee-saved register. Find which one by setting a breakpoint on every `bl` in the range and
+reading the register at each stop:
+
+```
+awk '/^  <start>:/{f=1} f&&/^  <end>:/{exit} f' blob.dis | grep '	bl	' | awk '{print $1}'
+```
+
+Breakpoints that never fire are information too: they tell you which branch was taken.
+
+Then put a **watchpoint** on the saved stack slot and let it name the culprit outright:
+
+```
+breakpoint set -a <base + function entry>
+continue
+watchpoint set expression -s 8 -- $sp-0x10     # the slot the prologue saves the register into
+continue                                        # hit 1 is the legitimate save
+continue                                        # hit 2 is whoever corrupts it
+register read pc ; memory region $pc
+```
+
+`memory region` prints the mapped file, so the second hit names the offending library directly.
+
+## The bug class this keeps finding
+
+**A prebuilt blob that stack-allocates a platform C++ type is an ABI landmine.** The blob reserved
+stack for that type as it was when the blob was compiled. Any platform upgrade that grows the type
+overruns the reservation and corrupts whatever is next on the stack — usually the register save
+area, so the symptom appears in an unrelated function later, with no log and no bad data anywhere.
+
+The worked example: tinyxml2 11.0.0 changed `DynArray`/`MemPoolT` size fields from `int` to
+`size_t`, which grew every embedded `DynArray` by 8 bytes and with it `sizeof(XMLDocument)`. A
+camera HAL parsing a calibration XML into a stack `XMLDocument` overran it and cleared the saved
+`x20`, which the *caller* was holding a pointer in. Two frames later that pointer was null.
+
+Suspect this whenever a blob works on release N and faults on N+1 with identical inputs. Confirm
+it cheaply before rebuilding anything: bind-mount the old library over the new one on a running
+device and see if the crash goes away.
+
+```
+adb push old/libfoo.so /data/local/tmp/
+adb shell mount --bind /data/local/tmp/libfoo.so /vendor/lib64/libfoo.so
+```
+
+Fix by pinning the vendor copy to the old ABI. A whole-tree revert of the upgrade is the expedient
+version; the upstreamable one is a vendor variant built from the old source, leaving the platform
+on the new one.

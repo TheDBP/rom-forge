@@ -231,3 +231,56 @@ forever. A rescaled OEM animation shipped at the old size while the extractor lo
 - Do verify from the image: `unzip -p out/.../system/product/media/bootanimation.zip desc.txt`
   must show the panel size. The extractor log only proves the asset was written.
 - The `oem` option's `post-patch.sh` drops the genrule outputs every build so the copy re-runs.
+
+## 29. init's updatable-crash path is what actually reboots a vendor device
+
+A vendor service that exits badly five times before `sys.boot_completed` makes init set
+`sys.init.updatable_crashing`, and apexd answers that with "Native process '<name>' is crashing.
+Attempting a revert" and reboots. After boot the same counter applies inside a four-minute window,
+so a service that dies every ~40 s keeps rebooting a *booted* phone. The service need not be
+important; it needs to exit non-zero.
+
+Rank restarts before blaming the loudest crash:
+
+```
+grep "init: starting service" logcat | sed "s/.*service '\([^']*\)'.*/\1/" | sort | uniq -c | sort -rn
+```
+
+The top entries are the boot killers; a tombstone count will point you at a different, innocent
+process. `oneshot` in the service's .rc stops init restarting it, which keeps the counter at one
+and lets a device boot so you can debug the crash on a live system instead of in a reboot loop.
+
+## 30. One symptom, several stacked causes
+
+`bpf.progs_loaded` had four independent breakages behind each other on a 4.9 kernel, each hiding
+the next, every one presenting identically: the health HAL blocked in `HealthLoop::UeventInit()`,
+so BatteryService hung in `IHealth.registerCallback()` and the watchdog killed system_server at 66 s
+with only "Blocked in handler on main thread" to show for it.
+
+Fixing one and seeing no change does not mean the fix was wrong. Re-measure the *mechanism*
+(here: is the property set?) rather than the symptom, or you will revert good work.
+
+Anything calling `bpf::waitForProgsLoaded()` blocks forever until that property is set, and the
+property is only set by the last link of netbpfload -> uprobestatsbpfload -> platform bpfloader ->
+netbpfload "done". Any break in that chain hangs unrelated subsystems.
+
+## 31. A guard written after the call that aborts is dead code
+
+```c
+auto map = bpf::BpfMapRO<uint64_t, uint64_t>(path);
+if (!map.isValid()) { LOG(ERROR) << ...; return false; }   // never runs
+```
+
+`BpfMapRO`'s constructor `Abort()`s when the map is not pinned, so the author's graceful path can
+never execute. Check the pin path with `access()` first. The same shape shows up wherever a
+constructor validates: the object aborts before anyone can ask whether it is valid.
+
+## 32. Regenerating a patch file does not update the live tree
+
+`overlay/patches/` is what a fresh bootstrap applies; `build_output/src/` is what incremental
+builds compile. Rewriting a patch leaves the tree on the old version, and the two drift silently —
+you can test a build for days that a fresh bootstrap would never reproduce.
+
+After changing a patch, resync the project: back up any uncommitted forge-option edits
+(`BoardConfigLineage.mk`), `git reset --hard <base>`, `git am overlay/patches/<project>/*.patch`,
+restore the backup. Then the tree and the series agree.
