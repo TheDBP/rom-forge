@@ -228,7 +228,18 @@ fi
 [ -n "$missing" ] && echo ">> note: not in this GApps zip, kept the Lineage version:$missing"
 found=$(find "$OUT" -mindepth 2 -name '*.apk' 2>/dev/null | wc -l)
 if [ "$found" -eq 0 ]; then
-  echo "!! none of the target Google apps were found in $ZIP — wrong/incomplete GApps package? Failing." >&2
+  # None of the seven present is only an error if the zip is not a GApps package at all. A core
+  # package -- MindTheGapps is the one we use -- ships GMS Core and the Play Store and deliberately
+  # does NOT carry Google's builds of the stock apps, so nothing to swap is the CORRECT outcome for
+  # it and the Lineage apps are kept. Tell the two apart by whether the zip has a GApps core at all,
+  # rather than failing a build for using the smaller package on purpose.
+  if grep -qE '^(com\.google\.android\.gms|com\.android\.vending)\|' "$INDEX" 2>/dev/null; then
+    echo ">> no stock-app swaps in this package (a GApps core: GMS Core / Play Store present)."
+    echo "   Keeping the Lineage apps. That is the expected result for MindTheGapps."
+    exit 0
+  fi
+  echo "!! none of the target Google apps were found in $ZIP, and it has no GMS Core or Play Store" >&2
+  echo "!! either — wrong or incomplete GApps package. Failing." >&2
   exit 1
 fi
 echo ">> done: staged $found Google app(s). WITH_GAPPS builds swap these in + set the defaults."
