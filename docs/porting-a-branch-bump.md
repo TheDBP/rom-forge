@@ -92,6 +92,24 @@ Two patches touching the same project are usually independent. On the ether port
 needed four unrelated patches; one was dropped at promotion time as a "duplicate" of another and had
 to be restored after it caused a build failure.
 
+## Re-point BASE_REF when you rebranch
+
+`device.conf` carries `BRANCH` *and* `BASE_REF`, and renaming the repo or bumping `BRANCH` does not
+touch `BASE_REF`. Left stale it names a ref that exists in no project, so `refresh-patches.sh`
+skips every one of them:
+
+```
+!! <project>: BASE_REF 'm/lineage-22.2' does not resolve in this project -- skipping
+```
+
+It prints that per project and exits 0, so the series silently stops being exported and every patch
+has to be written by hand. Check both after any rebranch:
+
+```
+grep -E '^(BRANCH|BASE_REF)=' device.conf
+git -C build_output/src/<any-project> rev-parse --verify "$BASE_REF"
+```
+
 ## Env plumbing
 
 Anything `_build_rom.sh` reads must be added in **two** places — `bootstrap.sh` hands the container
