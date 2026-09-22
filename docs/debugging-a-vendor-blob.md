@@ -120,6 +120,26 @@ register read pc ; memory region $pc
 
 `memory region` prints the mapped file, so the second hit names the offending library directly.
 
+## Do not restart a HAL to pick up a property
+
+Testing a vendor property looks like it should be cheap -- `setprop`, restart the HAL that reads it,
+try again -- and for a display or media HAL it is not. `ctl.restart vendor.hwcomposer-2-2` takes
+SurfaceFlinger down with it, SurfaceFlinger takes zygote, and on a device whose display stack is
+already the thing you are debugging the framework may not come back: it sits in the boot animation
+with `init.svc.bootanim` still `running` while `sys.boot_completed` reads 1 from before the restart.
+Measured twice on a Pixel 3a XL, and once it went further and rebooted the device outright --
+`init: critical process 'zygote' exited 4 times in 10 minutes` -> `reboot: Restarting system with
+command 'zygote-fatal'`.
+
+So a property test costs a build and a flash. That is ~35 minutes against a wedged phone and a
+reboot, and the reboot does not even give you the measurement.
+
+Two things make that bearable. Get a REPRODUCIBLE TRIGGER from whoever is holding the device before
+spending a build -- "it happens when I apply a colour scheme" turns a soak into a single action, and
+it is the difference between one build answering the question and five not answering it. And check
+the error counter as well as the symptom: a fix that stops the visible failure while the underlying
+error still climbs in `dmesg` is a fix that has hidden the bug rather than removed it.
+
 ## The bug class this keeps finding
 
 **A prebuilt blob that stack-allocates a platform C++ type is an ABI landmine.** The blob reserved
