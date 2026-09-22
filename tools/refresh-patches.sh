@@ -124,12 +124,17 @@ refresh() {
 
   # --zero-commit: bootstrap re-applies the series with git am on every run, so the commit hashes
   # in "From <sha>" change every build and every patch file would show as modified for nothing.
+  # --no-signature for the same reason as --zero-commit: the trailing "-- \n<git version>" changes
+  # whenever the build host's git is upgraded, and every patch in the repo then shows as modified.
   local tmp; tmp="$(mktemp -d)"
   local n=1
   for sha in $shas; do
-    ( cd "$d" && git format-patch -N --zero-commit -1 --start-number "$n" "$sha" -o "$tmp" ) >/dev/null
+    ( cd "$d" && git format-patch -N --zero-commit --no-signature -1 --start-number "$n" "$sha" -o "$tmp" ) >/dev/null
     n=$((n+1))
   done
+  # Change-Id belongs to Gerrit, not to a patch series carried in this repo. Committing one means
+  # the next upstream cherry-pick of the same change collides with it.
+  sed -i '/^Change-Id: /d' "$tmp"/*.patch 2>/dev/null || true
   local new; new=$(count_patches "$tmp")
 
   # The failure this script was built to have. Refuse it even with --force: there is no situation
