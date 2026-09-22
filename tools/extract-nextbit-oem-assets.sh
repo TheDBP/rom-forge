@@ -92,7 +92,7 @@ if [ -d "$TMP/system/media/audio" ]; then
   sort -u "$ref_sha" -o "$ref_sha"; sort -u "$ref_name" -o "$ref_name"
 
   rm -rf "$OEM/sounds/media/audio"; mkdir -p "$OEM/sounds/media/audio"
-  kept=0; skipped=0; renamed=0
+  kept=0; skipped=0; renamed=0; ns_names=""
   while IFS= read -r -d '' f; do
     rel="${f#"$TMP"/system/media/audio/}"
     # Content match means a real duplicate wherever it lives. A name match only means duplicate
@@ -113,6 +113,7 @@ if [ -d "$TMP/system/media/audio" ]; then
         # duplicate. A name of our own sidesteps both, leaves the Lineage sound installed and
         # selectable, and gives the overlay that selects ours something to point at.
         if grep -qxF "$(basename "$f")" "$ref_name"; then
+          ns_names="$ns_names $(basename "$f")"
           rel="$(dirname "$rel")/$OEM_SOUND_PREFIX$(basename "$f")"
           renamed=$((renamed+1))
         fi
@@ -126,6 +127,31 @@ if [ -d "$TMP/system/media/audio" ]; then
   done < <(find "$TMP/system/media/audio" -name '*.ogg' -print0)
   echo "   sounds: kept $kept ($renamed of them namespaced $OEM_SOUND_PREFIX*), skipped $skipped already-in-Lineage (of $((kept+skipped)))"
   [ "$kept" -gt 0 ] || echo "   !! kept 0 sounds — check the Lineage reference dirs exist under $AOSP"
+
+  # Point the sound-effect table at the namespaced files. SoundEffectsHelper reads this table from
+  # com.android.internal.R.xml.audio_assets, so a device overlay is what selects a different file;
+  # copying the .ogg in is not enough on its own.
+  #
+  # The overlay REPLACES the stock resource, so it is derived from the stock file rather than
+  # written from a template: every asset id the branch declares is preserved and only the file=
+  # names we actually reclaimed are rewritten. A hand-written table would silently drop whatever
+  # ids a future branch adds.
+  _aa_src="$AOSP/frameworks/base/core/res/res/xml/audio_assets.xml"
+  if [ -n "${ns_names// /}" ] && [ -f "$_aa_src" ]; then
+    _aa_out="$OEM_OVL/frameworks/base/core/res/res/xml/audio_assets.xml"
+    mkdir -p "$(dirname "$_aa_out")"; cp -f "$_aa_src" "$_aa_out"
+    _aa_n=0
+    for _n in $ns_names; do
+      grep -q "file=\"$_n\"" "$_aa_out" || continue   # this branch's table does not use it
+      sed -i "s|file=\"$_n\"|file=\"$OEM_SOUND_PREFIX$_n\"|g" "$_aa_out"
+      _aa_n=$((_aa_n+1))
+    done
+    if [ "$_aa_n" -gt 0 ]; then
+      echo "   sound effects: $_aa_n file(s) repointed to $OEM_SOUND_PREFIX* in the audio_assets overlay"
+    else
+      rm -f "$_aa_out"   # nothing we reclaimed is in the table; do not replace it for no reason
+    fi
+  fi
 else
   echo "   !! no system/media/audio in the zip"
 fi
