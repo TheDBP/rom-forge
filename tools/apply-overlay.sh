@@ -60,7 +60,18 @@ apply_project_from() {
   if [ ! -d "$AOSP/$proj/.git" ]; then echo "   (skip $proj — not synced yet)"; return 0; fi
   local subjs; subjs=$(sed -n 's/^Subject: \[PATCH[^]]*\] //p' "$dir"/*.patch)
   local subj="${subjs%%$'\n'*}"
-  local applied; applied=$(cd "$AOSP/$proj" && git log --pretty=%s -80 2>/dev/null) || applied=""
+  # Look at OUR commits only -- those on top of BASE_REF -- not the project's whole history. A
+  # subject is not unique: a patch that reverts an upstream commit has the same subject as an
+  # upstream revert of the same commit, and upstream sometimes lands one of its own. Matching the
+  # full log then "finds" our patch in upstream's history and silently skips it, leaving the tree
+  # without the change. That is how hardware/google/pixel lost the drv2624 vibrator tree: upstream
+  # carried its own Revert "pixel: Restore drv2624 vibrator HAL APEX" while ours restores the
+  # directory that revert deleted. Fall back to the old window only if BASE_REF does not resolve.
+  local _range="-80"
+  if [ -n "${BASE_REF:-}" ] && ( cd "$AOSP/$proj" && git rev-parse --verify --quiet "$BASE_REF" >/dev/null 2>&1 ); then
+    _range="$BASE_REF..HEAD"
+  fi
+  local applied; applied=$(cd "$AOSP/$proj" && git log --pretty=%s $_range 2>/dev/null) || applied=""
   if [ -n "$subj" ] && [[ "$applied" == *"$subj"* ]]; then
     echo "   ($proj: '$subj' already applied — skipping)"; return 0
   fi
