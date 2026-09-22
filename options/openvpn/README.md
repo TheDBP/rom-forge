@@ -32,3 +32,15 @@ native libraries for a bundled app, so when the fetcher finds them compressed or
 unpacks them beside the APK and `jni/Android.mk` installs them under `app/OpenVPN/lib/arm64/`.
 Without that the app installs and simply cannot connect, which looks like a configuration problem
 rather than a packaging one.
+
+## Branches
+
+Patches exist for lineage-20.0, 22.2 and 24.0, and `COMPAT` names exactly those — an option that is
+offered on a branch it has no patch for still fetches the APK and then installs nothing, because the
+patch is what adds `PRODUCT_PACKAGES += OpenVPN`. Add a branch here only once its patch is verified.
+
+On lineage-20.0 the APK is copied verbatim, which needs the device's own
+`build/make` patch turning `check-jni-dex-compression` into a warning (ether-20.0 carries it as
+`overlay/patches/build/make/0001-build-warn-instead-of-failing-on-a-presigned-APK-wit.patch`).
+`require.sh` checks for it and fails the build with that message rather than shipping a VPN client
+that cannot connect.
