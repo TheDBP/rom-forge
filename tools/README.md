@@ -18,6 +18,7 @@ container.
 | `ota-extract.sh` | when you need a reference ROM | partitions out of a signed A/B OTA, and optionally flashed to one slot so you can keep a known-good build on the inactive slot |
 | `slot-switch.sh` | when you need the other slot's ROM to boot | the device moved to the other slot with the shared `/data` wiped and the setup wizard skipped, because the older ROM stops booting once the newer one has initialised user 0 |
 | `blob-attach.sh` | when a prebuilt HAL crashes | a vendor binary under `lldb-server` with its library load base printed, so absolute breakpoints work in a stripped blob |
+| `boot-window-logcat.sh` | when a boot ends in a reboot | the logcat, dmesg and properties of each window adbd is reachable, one set per appearance — the route that does not depend on the ramoops region surviving the reboot |
 | `unpack-block-ota.sh` | when flashing | partition images out of a `payload.bin` OTA, for fastboot-only flashing |
 | `check-sigpipe.sh` | before committing | pipelines that will die silently under `set -o pipefail` |
 | `dev-shell.sh` | any time | an interactive shell in the build container |
