@@ -33,7 +33,11 @@ DEV="$AOSP/device/$DEVICE"
 # functional rather than titular -- Effect_Tick is "the click" -- so the stock file is a rival
 # implementation of the same slot, not a duplicate, and it needs a name of its own to sit beside
 # the Lineage one instead of losing to it.
-OEM_SOUND_PREFIX="${OEM_SOUND_PREFIX:-ether-}"
+#
+# Named for the PACK, not the device being built. The sounds are Nextbit's, and any device may
+# select this pack (the Pixel build already borrows the Robin boot animation), so a device-derived
+# prefix would be wrong on every build but one.
+OEM_SOUND_PREFIX="${OEM_SOUND_PREFIX:-nextbit-}"
 # Everything this script stages goes under vendor/extra, not the device tree, so the oem option is
 # the same on every device and needs no device patch to install it. DEV is still used for the
 # "is this device synced" sanity check and nothing else.
