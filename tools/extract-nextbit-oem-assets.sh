@@ -28,6 +28,12 @@ AOSP="${2:-/aosp}"
 _SELF_REPO="$(cd "$(dirname "$0")/../.." && pwd)"; [ -f "$_SELF_REPO/device.conf" ] && source "$_SELF_REPO/device.conf"
 : "${DEVICE:?device.conf missing or DEVICE unset}"
 DEV="$AOSP/device/$DEVICE"
+
+# Prefix for reclaimed ui/ sounds whose filename is already taken by LineageOS. Those names are
+# functional rather than titular -- Effect_Tick is "the click" -- so the stock file is a rival
+# implementation of the same slot, not a duplicate, and it needs a name of its own to sit beside
+# the Lineage one instead of losing to it.
+OEM_SOUND_PREFIX="${OEM_SOUND_PREFIX:-ether-}"
 # Everything this script stages goes under vendor/extra, not the device tree, so the oem option is
 # the same on every device and needs no device patch to install it. DEV is still used for the
 # "is this device synced" sanity check and nothing else.
@@ -86,7 +92,7 @@ if [ -d "$TMP/system/media/audio" ]; then
   sort -u "$ref_sha" -o "$ref_sha"; sort -u "$ref_name" -o "$ref_name"
 
   rm -rf "$OEM/sounds/media/audio"; mkdir -p "$OEM/sounds/media/audio"
-  kept=0; skipped=0
+  kept=0; skipped=0; renamed=0
   while IFS= read -r -d '' f; do
     rel="${f#"$TMP"/system/media/audio/}"
     # Content match means a real duplicate wherever it lives. A name match only means duplicate
@@ -100,7 +106,17 @@ if [ -d "$TMP/system/media/audio" ]; then
       skipped=$((skipped+1)); continue          # identical content -> a real duplicate
     fi
     case "$rel" in
-      ui/*) ;;                                  # keep: same name, different sound
+      ui/*)
+        # Keep it, but namespace it if the name is taken. Installing a second Effect_Tick.ogg
+        # would not work anyway: the framework resolves ui sounds under /product before /system,
+        # Lineage fills /product, and the build keeps the first destination it sees for any
+        # duplicate. A name of our own sidesteps both, leaves the Lineage sound installed and
+        # selectable, and gives the overlay that selects ours something to point at.
+        if grep -qxF "$(basename "$f")" "$ref_name"; then
+          rel="$(dirname "$rel")/$OEM_SOUND_PREFIX$(basename "$f")"
+          renamed=$((renamed+1))
+        fi
+        ;;
       *) if grep -qxF "$(basename "$f")" "$ref_name"; then
            skipped=$((skipped+1)); continue     # same title -> the same tune re-encoded
          fi ;;
@@ -108,7 +124,7 @@ if [ -d "$TMP/system/media/audio" ]; then
     mkdir -p "$OEM/sounds/media/audio/$(dirname "$rel")"
     cp -a "$f" "$OEM/sounds/media/audio/$rel"; kept=$((kept+1))
   done < <(find "$TMP/system/media/audio" -name '*.ogg' -print0)
-  echo "   sounds: kept $kept Robin-unique, skipped $skipped already-in-Lineage (of $((kept+skipped)))"
+  echo "   sounds: kept $kept ($renamed of them namespaced $OEM_SOUND_PREFIX*), skipped $skipped already-in-Lineage (of $((kept+skipped)))"
   [ "$kept" -gt 0 ] || echo "   !! kept 0 sounds — check the Lineage reference dirs exist under $AOSP"
 else
   echo "   !! no system/media/audio in the zip"
