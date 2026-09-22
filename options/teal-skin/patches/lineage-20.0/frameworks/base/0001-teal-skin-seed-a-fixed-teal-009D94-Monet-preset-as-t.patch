@@ -16,15 +16,18 @@ diff --git a/packages/SettingsProvider/res/values/defaults.xml b/packages/Settin
 index 99b15db780dc..063a027a5941 100644
 --- a/packages/SettingsProvider/res/values/defaults.xml
 +++ b/packages/SettingsProvider/res/values/defaults.xml
-@@ -320,4 +320,9 @@
+@@ -320,4 +320,12 @@
  
      <!-- Whether vibrate icon is shown in the status bar by default. -->
      <integer name="def_statusBarVibrateIconEnabled">0</integer>
 +
-+    <!-- teal-skin: seed a fixed teal (#009D94) Monet palette as a user PRESET, so the accent is teal
-+         out of the box and stays teal across wallpaper changes (color_source=preset makes
-+         ThemeOverlayController skip wallpaper re-seeding). -->
-+    <string name="def_theme_customization_overlay_packages" translatable="false">{\"android.theme.customization.system_palette\":\"009D94\",\"android.theme.customization.color_source\":\"preset\",\"android.theme.customization.theme_style\":\"VIBRANT\"}</string>
++    <!-- teal-skin: seed a teal (#009D94) Monet palette so the accent is teal out of the box. Note
++         what is NOT set: color_source. Setting it to "preset" would pin the accent, but it also
++         makes ThemeOverlayController skip wallpaper re-seeding, so changing the wallpaper would
++         never move the palette and the Wallpaper & Style colour options would look broken. Left
++         unset, the seed decides the first boot and the wallpaper drives it afterwards -- and the
++         teal-wallpaper option ships a teal wallpaper, so the derived colour starts teal too. -->
++    <string name="def_theme_customization_overlay_packages" translatable="false">{\"android.theme.customization.system_palette\":\"009D94\",\"android.theme.customization.theme_style\":\"VIBRANT\"}</string>
  </resources>
 diff --git a/packages/SettingsProvider/src/com/android/providers/settings/DatabaseHelper.java b/packages/SettingsProvider/src/com/android/providers/settings/DatabaseHelper.java
 index 62fff96c57ad..9ba98f5538e5 100644
