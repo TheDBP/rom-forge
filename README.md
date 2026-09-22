@@ -22,6 +22,7 @@ does, or update `forge/` inside an existing device repo.
 | Set up a new phone from scratch | Clone the [device template](https://github.com/TheDBP/rom-forge-device-template) and run `./start-here.sh`. |
 | Build one **without** Google apps, to share | `PRESET=clean ./bootstrap.sh` |
 | Build one with GApps, root and every tweak | `PRESET=full ./bootstrap.sh` |
+| Build **plain LineageOS**, to compare against | `PRESET=stock ./bootstrap.sh` |
 | Change how Android behaves out of the box | Enable **options** — see [Customizing the ROM](#customizing-the-rom). |
 | Push a phone onto a **newer** Android than upstream supports | Read [docs/porting-a-branch-bump.md](docs/porting-a-branch-bump.md) **first**. |
 | Work out whether a port is even feasible | `tools/check-platform-support.sh` — no build required. |
@@ -92,6 +93,27 @@ what apps it has. Add it to whichever preset you are building with `EXTRA_OPTION
 ```sh
 EXTRA_OPTIONS=oem PRESET=clean ./forge/bootstrap.sh   # builds tag turbo-clean-oem
 ```
+
+### `stock` — the reference build
+
+Every device has a `stock` preset without declaring one. It is the empty option set: LineageOS as
+upstream ships it, carrying only the `overlay/patches/` that make the hardware run, and none of the
+theming, apps or behaviour changes.
+
+```sh
+PRESET=stock ./forge/bootstrap.sh          # tag: stock
+```
+
+It is the only preset that takes neither `COMMON_OPTIONS` nor `EXTRA_OPTIONS` — "stock plus the
+dozen things we always add" would not be stock, and a stock image quietly carrying `oem` art would
+be a lie in its own filename. Asking for it with `EXTRA_OPTIONS` set prints a note saying it was
+ignored.
+
+Its value is answering one question quickly: **is this ours or upstream's?** A bug that reproduces
+on a stock build is LineageOS's; one that disappears is something we added, and the option list is
+then the search space. That is a single flash instead of an argument.
+
+Declare your own `stock` row in `PRESETS` and it wins over the built-in one.
 
 The `-oem` suffix is derived, not typed: every option `EXTRA_OPTIONS` adds that the preset does
 not already have appends `-<name>` to the tag. `release.sh` proves an artifact by the tag in its

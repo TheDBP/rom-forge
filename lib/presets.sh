@@ -67,13 +67,38 @@ _forge_preset_row() {
   return 1
 }
 
+# "stock" is reserved and exists on every device without being declared anywhere. It is the EMPTY
+# option set: LineageOS as upstream ships it, carrying only the overlay/patches that make this
+# hardware run, and none of the theming, app or behaviour options. Unlike every other preset it
+# takes neither COMMON_OPTIONS nor EXTRA_OPTIONS, because "stock plus the dozen things we always
+# add" is not stock.
+#
+# The point is to have a reference. When something misbehaves, a stock build answers "is this ours
+# or upstream's?" in one flash, which is otherwise a question that can only be argued about. There
+# was no way to ask for it before: an ad-hoc OPTIONS="" is indistinguishable from unset, so
+# bootstrap fell through to the first preset, and every declared preset gets COMMON_OPTIONS merged
+# in -- so the empty set was not expressible.
+#
+# A device may still declare its own `stock` row, and that row then wins.
+FORGE_STOCK_PRESET=stock
+
+_forge_stock_is_synthetic() {
+  [ "$1" = "$FORGE_STOCK_PRESET" ] && ! _forge_preset_row "$FORGE_STOCK_PRESET" >/dev/null 2>&1
+}
+
 forge_preset_names() {
-  local line first
+  local line first seen_stock=0
   while IFS= read -r line; do
     line="${line%%#*}"
     first="$(printf '%s\n' $line 2>/dev/null | head -1)"
-    [ -n "$first" ] && printf '%s\n' "$first"
+    [ -n "$first" ] || continue
+    [ "$first" = "$FORGE_STOCK_PRESET" ] && seen_stock=1
+    printf '%s\n' "$first"
   done <<< "${PRESETS:-}"
+  # Appended, never prepended: bootstrap builds the first name when none is given and release.sh
+  # publishes the first that omits gapps and oem. Putting stock at the top would silently change
+  # both of those to a build nobody asked for.
+  [ "$seen_stock" = 1 ] || printf '%s\n' "$FORGE_STOCK_PRESET"
 }
 
 # Value of key=... in a preset row. Absent key -> empty string, still exit 0; unknown preset -> 1.
@@ -95,6 +120,7 @@ forge_preset_field() {
 # hand-written "clean-oem tag=turbo-clean" row could.
 forge_preset_tag() {
   local tag own o
+  if _forge_stock_is_synthetic "$1"; then printf '%s' "$FORGE_STOCK_PRESET"; return 0; fi
   tag="$(forge_preset_field "$1" tag)" || return 1
   own=" $(forge_preset_field "$1" options | tr ',' ' ') $(printf '%s' "${COMMON_OPTIONS:-}" | tr ',' ' ') "
   # Only suffix what the preset does not already declare; a preset that names oem has its own tag.
@@ -109,6 +135,13 @@ forge_preset_tag() {
 # is how one row quietly ends up missing something the others have.
 forge_preset_options() {
   local own common extra out=" " o
+  if _forge_stock_is_synthetic "$1"; then
+    # Warn rather than silently honour it: EXTRA_OPTIONS is often set once in device.conf.local and
+    # forgotten, and a "stock" image carrying oem or gapps would be a lie in the filename.
+    [ -z "${EXTRA_OPTIONS:-}" ] || \
+      echo "   note: preset $FORGE_STOCK_PRESET ignores EXTRA_OPTIONS='${EXTRA_OPTIONS}' -- stock takes no options" >&2
+    printf ''; return 0
+  fi
   own="$(forge_preset_field "$1" options | tr ',' ' ')" || return 1
   common="$(printf '%s' "${COMMON_OPTIONS:-}" | tr ',' ' ')"
   # EXTRA_OPTIONS applies to whichever preset you build -- one switch across all of them, rather than
