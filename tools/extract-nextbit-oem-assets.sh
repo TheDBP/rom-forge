@@ -177,6 +177,28 @@ $(printf '%s' "$_l" | sed "s|>[^<]*/$_n<|>/system/media/audio/ui/$OEM_SOUND_PREF
         _sp_n=$((_sp_n+1))
       done < <(grep -E "<string name=\"[^\"]+\"[^>]*>[^<]*/$_n</string>" "$_sp_src" || true)
     done
+
+    # The pack has no wired charging sound at all: ChargingStarted.ogg postdates Android 7. It does
+    # carry a WirelessChargingStarted.ogg, because AOSP ships that one on every build whether or not
+    # the hardware has a coil -- and the Robin has none, nor does the Pixel 3a XL that also takes
+    # this pack. So the setting it would normally feed can never fire, and the reclaimed file would
+    # be installed and never heard. Point the wired setting at it as well; that is the only way the
+    # asset ever plays, and a device that does have wireless charging simply gets the same sound for
+    # both. Skipped if the pack ever turns out to have its own ChargingStarted.ogg.
+    _wcs="WirelessChargingStarted.ogg"
+    case " $ns_names " in
+      *" $_wcs "*)
+        if [ ! -f "$TMP/system/media/audio/ui/ChargingStarted.ogg" ]; then
+          _cl="$(grep -E '<string name="def_charging_started_sound"[^>]*>' "$_sp_src" || true)"
+          if [ -n "$_cl" ]; then
+            _sp_body="$_sp_body
+$(printf '%s' "$_cl" | sed "s|>[^<]*<|>/system/media/audio/ui/$OEM_SOUND_PREFIX$_wcs<|")"
+            _sp_n=$((_sp_n+1))
+            echo "   + wired charging repointed to the pack's wireless sound (it ships no ChargingStarted.ogg)"
+          fi
+        fi
+        ;;
+    esac
     if [ "$_sp_n" -gt 0 ]; then
       mkdir -p "$(dirname "$_sp_out")"
       { echo '<?xml version="1.0" encoding="utf-8"?>'
