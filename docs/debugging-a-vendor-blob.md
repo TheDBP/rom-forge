@@ -20,6 +20,16 @@ fastboot set_active a && fastboot reboot
 properties — carries across both ROMs. Switch back with `fastboot set_active b`. Keep the rig:
 you will want to re-measure on the working side several times.
 
+**Boot the old branch first, and expect the rig to expire.** The shared `/data` that carries your
+debug setup across is also what ends the comparison: once the newer ROM has booted and initialised
+user 0, the older one may no longer be able to. Going back then stops at
+`Can't load Android system ... Reason: init_user0_failed`, and the only way through is a factory
+reset — which wipes the `/data` both slots share, taking the working side's setup with it.
+Measured on a Pixel 3a XL: lineage-22.2 on slot a booted fine as a reference, then refused after
+24.0 had come up on slot b. So take every measurement you think you will want from the old branch
+while you still can, and treat a late "let me just check the old one" as a request to rebuild the
+whole rig.
+
 If the old branch is *also* broken, stop. You are not looking at a regression and the rest of this
 does not apply.
 
