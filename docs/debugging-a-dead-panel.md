@@ -22,6 +22,10 @@ not the backlight — do not keep chasing brightness.
 
 ## Instrument the two functions that turn a display off
 
+The forge ships this as an option — `EXTRA_OPTIONS=drm-trace` — so you do not have to hand-edit a
+kernel tree and remember to revert it. See [`options/drm-trace/README.md`](../options/drm-trace/README.md).
+What it does, and what to do if you are adding it somewhere else:
+
 Nothing in logcat will name the culprit, because the kill happens in the kernel on behalf of a
 userspace ioctl. Put `pr_info` + `dump_stack()` in `drm_atomic_helper_disable_plane()` and
 `drm_atomic_helper_set_config()` in `drivers/gpu/drm/drm_atomic_helper.c`:
@@ -91,7 +95,7 @@ dmesg | grep -c "FORGE: disable_plane"                    # may be non-zero, sur
 dmesg | grep -c "drm_atomic.c:868"                        # falls to 0 with the real fix
 ```
 
-Strip the instrumentation only after that passes, and keep it flashed while the fix is on trial:
+Build without `drm-trace` only after that passes, and keep it flashed while the fix is on trial:
 it costs nothing when no event fires, and it is the only regression detector for this class.
 
 Two traps while measuring:
