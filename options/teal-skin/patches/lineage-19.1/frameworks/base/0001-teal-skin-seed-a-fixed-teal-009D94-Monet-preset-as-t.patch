@@ -25,7 +25,7 @@ index 8e6e251ff3f2..14c73378b21f 100644
 +         what is NOT set: color_source. Setting it to "preset" would pin the accent, but it also
 +         makes ThemeOverlayController skip wallpaper re-seeding, so changing the wallpaper would
 +         never move the palette and the Wallpaper & Style colour options would look broken. Left
-+         unset, the seed decides the first boot and the wallpaper drives it afterwards -- and the
++         unset, the seed decides the first boot and the wallpaper drives it afterwards, and the
 +         teal-wallpaper option ships a teal wallpaper, so the derived colour starts teal too. -->
 +    <string name="def_theme_customization_overlay_packages" translatable="false">{\"android.theme.customization.system_palette\":\"009D94\",\"android.theme.customization.theme_style\":\"VIBRANT\"}</string>
  </resources>
