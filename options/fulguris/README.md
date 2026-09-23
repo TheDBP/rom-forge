@@ -32,3 +32,23 @@ and the build stops at the option check -- add a patch set before putting it in 
 
 Nothing to bump for a new release -- the next build fetches it. The signer pin lives in
 `prebuilt/fetch-fulguris.sh`; `FDROID_PINS` holds a version when you need one.
+
+## Why it is in no preset
+
+Fulguris replaces Jelly rather than installing alongside it (`overrides: ["Jelly"]`), so a preset
+that carries Fulguris ships it as the **only** browser. On first run it asks you to accept its
+privacy policy and terms — and with no other browser installed there is nothing to open those
+documents in. You are asked to agree to something you cannot read.
+
+That is why no preset carries it. Dropping it restores Jelly, which is the sane default: it is
+Lineage's own browser and part of the base image either way.
+
+Add it deliberately when you want it:
+
+```sh
+EXTRA_OPTIONS=fulguris PRESET=full ./forge/bootstrap.sh
+```
+
+The same caution applies to any browser option that overrides Jelly — `firefox` has the same shape.
+Shipping a single browser that gates first use behind documents it alone can display is a trap
+worth avoiding by default.
