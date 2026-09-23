@@ -112,3 +112,18 @@ carrying a newer version of the same apex must be signed with the same one.
 Only **prebuilt** apexes need this. Apexes the tree builds itself follow the platform payload type,
 which is already ext4 on such a device -- which is why 90 platform apexes mount and only this one
 fails. The tool decides by reading the payload's superblock magic, never by filename.
+
+### Signing the repack
+
+Sign with `signapk -a 4096 --align-file-size`, **not** `apksigner`. apexd loop-mounts
+`apex_payload.img` directly out of the zip, so its data has to start on a 4096-byte boundary;
+apksigner rewrites the zip and leaves it unaligned. The result signs and verifies perfectly and
+still will not mount — apexd says only `Invalid argument`, and the real cause shows up in the
+kernel log as `blk_update_request: I/O error, dev loopN, sector 2` / `EXT4-fs (loopN): unable to
+read superblock`. Aligning with `zipalign` first does not survive signing.
+
+`repack-erofs-apex.sh` asserts the 4096 alignment of the finished apex and refuses to install one
+that fails, because every other check passes on a broken build.
+
+Budget for the size, too: EROFS is compressed and ext4 is not, so the payload grows (146.5 MB to
+206 MB for GmsCore on bonito) and `/product` grows with it.

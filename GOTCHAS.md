@@ -315,3 +315,21 @@ zero. `/proc/mounts` is the honest source.
 Fix: `APEX_EROFS_UNSUPPORTED=true` in `device.conf` (needs `KEYS_DIR` and
 `tools/make-apex-key.sh`), which repacks the payload as ext4 and re-signs. The general fix is
 backporting EROFS to the kernel.
+
+Two traps in the repack itself, both of which produce an apex that signs and verifies and still
+will not mount:
+
+- **Sign with `signapk -a 4096 --align-file-size`, never `apksigner`.** apexd loop-mounts
+  `apex_payload.img` straight out of the zip, so its data must start on a 4096-byte boundary.
+  apksigner rewrites the zip and leaves it wherever. The symptom is only `Invalid argument` from
+  apexd; the real cause is in the kernel log — `blk_update_request: I/O error, dev loopN, sector 2`
+  then `EXT4-fs (loopN): unable to read superblock`. Running `zipalign` first does not help,
+  because signing undoes it. `signapk` needs `LD_LIBRARY_PATH=out/host/linux-x86/lib64` or it dies
+  loading conscrypt.
+- **ext4 is not compressed and EROFS is.** The payload grows — 146.5 MB to 206 MB for GmsCore —
+  so `/product` grows with it and `check_partition_sizes` can fail the build outright. Budget for
+  it before repacking.
+
+When comparing a broken apex against a reference, compare against one that MOUNTS, not against the
+original prebuilt: on such a device the original is broken too, so it agrees with your broken copy
+and "proves" the wrong thing.

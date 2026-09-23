@@ -37,7 +37,7 @@ done
 [ -d "$DIR" ] || { echo "!! no such directory: $DIR" >&2; exit 1; }
 
 H="$AOSP/out/host/linux-x86/bin"
-for t in deapexer apexer apksigner avbtool debugfs_static fsck.erofs; do
+for t in deapexer apexer signapk avbtool debugfs_static fsck.erofs; do
   [ -x "$H/$t" ] || { echo "!! missing host tool $t -- build the tree first (it comes from out/host)" >&2; exit 1; }
 done
 [ -n "$KEYS" ] || { echo "!! KEYS_DIR unset: the rebuilt apex has to be signed" >&2; exit 1; }
@@ -106,13 +106,29 @@ EOF
         "$W/payload" "$W/unsigned.apex" ) >"$W/apexer.log" 2>&1 \
     || { echo "   !! apexer failed -- see $W/apexer.log" >&2; tail -3 "$W/apexer.log" >&2; rc=1; continue; }
 
-  "$H/apksigner" sign --key "$KEYS/$apexname.pk8" --cert "$KEYS/$apexname.x509.pem" \
-      --min-sdk-version 30 --v2-signing-enabled true --v3-signing-enabled true \
-      --out "$W/signed.apex" "$W/unsigned.apex" >/dev/null 2>&1 \
-    || { echo "   !! apksigner failed" >&2; rc=1; continue; }
+  # signapk, NOT apksigner: apexd loop-mounts apex_payload.img straight out of the zip, so its data
+  # must start on a 4096-byte boundary. Only signapk --align-file-size does that. apksigner rewrites
+  # the zip and leaves the payload at an arbitrary offset -- the apex then signs and verifies
+  # perfectly and still fails to mount, with the kernel reporting
+  #   blk_update_request: I/O error, dev loopN, sector 2
+  #   EXT4-fs (loopN): unable to read superblock
+  # and apexd reporting only "Invalid argument". zipalign afterwards does not help: signing undoes
+  # it. LD_LIBRARY_PATH is needed or signapk dies loading its conscrypt native library.
+  LD_LIBRARY_PATH="$AOSP/out/host/linux-x86/lib64:$AOSP/out/host/linux-x86/lib" \
+  "$H/signapk" -a 4096 --align-file-size "$KEYS/$apexname.x509.pem" "$KEYS/$apexname.pk8" \
+      "$W/unsigned.apex" "$W/signed.apex" >/dev/null 2>&1 \
+    || { echo "   !! signapk failed" >&2; rc=1; continue; }
 
   unzip -q -o "$W/signed.apex" apex_payload.img -d "$W/check" 2>/dev/null
   if is_erofs "$W/check/apex_payload.img"; then echo "   !! still EROFS after repack" >&2; rc=1; continue; fi
+  # An unaligned payload produces an apex that verifies and will not mount. Refuse to ship it.
+  if ! python3 - "$W/signed.apex" <<'PYEOF'
+import sys, zipfile
+z = zipfile.ZipFile(sys.argv[1]); i = z.getinfo('apex_payload.img')
+off = i.header_offset + len(i.FileHeader())
+sys.exit(0 if off % 4096 == 0 else 1)
+PYEOF
+  then echo "   !! apex_payload.img is not 4096-aligned -- it would fail to mount" >&2; rc=1; continue; fi
   cp -f "$W/signed.apex" "$apex" || { rc=1; continue; }
   done_n=$((done_n+1))
   echo "   ok: $(du -h "$apex" | cut -f1), payload now ext4, signed as $apexname"
