@@ -84,3 +84,31 @@ DocumentsUI is renamed rather than removed, and that is deliberate. It is the pr
 file picker on the device, not just its own icon. Its launcher entry is an `activity-alias` with no
 `android:enabled` hook, so an overlay cannot hide it either; hiding would mean patching its manifest.
 A one-line string patch renames it and ends the collision at no risk.
+
+## APEX_EROFS_UNSUPPORTED
+
+MindTheGapps ships GmsCore **only** inside `com.google.android.gmssystem.prodvic.apex`, and Android
+15+ builds APEX payloads as EROFS. A kernel without `CONFIG_EROFS_FS` cannot mount one:
+
+```
+apexd: Mounting failed for package /product/apex/com.google.android.gmssystem.prodvic.apex: No such device
+```
+
+The apex then never activates and **everything inside it is absent at runtime**, with nothing in the
+log pointing at a filesystem. What you see instead is SetupWizard stuck on "Just a sec" forever,
+`SecurityException: Failed to find provider com.google.android.gsf.gservices`, and Google processes
+crash-looping -- while Play Store, GSF and SetupWizard, which are plain APKs, all install correctly.
+
+Set `APEX_EROFS_UNSUPPORTED=true` in `device.conf` on such a device and `post-patch.sh` repacks the
+payload as ext4 and re-signs it. It needs `KEYS_DIR` and a key made once on the host:
+
+```sh
+forge/tools/make-apex-key.sh com.google.android.gmssystem "$KEYS_DIR"
+```
+
+Keep that key. apexd accepts a pre-installed apex signed with any self-consistent key, but an OTA
+carrying a newer version of the same apex must be signed with the same one.
+
+Only **prebuilt** apexes need this. Apexes the tree builds itself follow the platform payload type,
+which is already ext4 on such a device -- which is why 90 platform apexes mount and only this one
+fails. The tool decides by reading the payload's superblock magic, never by filename.

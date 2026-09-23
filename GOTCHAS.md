@@ -284,3 +284,34 @@ you can test a build for days that a fresh bootstrap would never reproduce.
 After changing a patch, resync the project: back up any uncommitted forge-option edits
 (`BoardConfigLineage.mk`), `git reset --hard <base>`, `git am overlay/patches/<project>/*.patch`,
 restore the backup. Then the tree and the series agree.
+
+---
+
+## 33. GApps installs but Play Services does not exist (APEX payload is EROFS)
+SetupWizard hangs on "Just a sec" forever; `SecurityException: Failed to find provider
+com.google.android.gsf.gservices`; Google processes crash-loop. Play Store, GSF and SetupWizard are
+all installed, so it does not look like a packaging problem.
+
+```
+apexd: Mounting failed for package /product/apex/com.google.android.gmssystem.prodvic.apex: No such device
+```
+
+"No such device" is `ENODEV` — the kernel does not know the filesystem. Android 15+ builds APEX
+payloads as **EROFS**, and MindTheGapps ships GmsCore only inside that apex. A kernel without
+`CONFIG_EROFS_FS` cannot mount it, the apex never activates, and everything inside it is absent at
+runtime with no further symptom.
+
+Only **prebuilt** apexes are affected: apexes the tree builds itself use the platform payload type,
+so on such a device 90 of them mount and exactly one fails. Check the payload magic, not the name:
+
+```sh
+unzip -p <apex> apex_payload.img | dd bs=1 skip=1024 count=4 2>/dev/null | od -An -tx1   # e2e1f5e0 = EROFS
+adb shell 'grep -c apex /proc/mounts'      # how many actually mounted
+```
+
+Do not read `ls /apex` as shell to count them — it returns nothing without permission and reads as
+zero. `/proc/mounts` is the honest source.
+
+Fix: `APEX_EROFS_UNSUPPORTED=true` in `device.conf` (needs `KEYS_DIR` and
+`tools/make-apex-key.sh`), which repacks the payload as ext4 and re-signs. The general fix is
+backporting EROFS to the kernel.
