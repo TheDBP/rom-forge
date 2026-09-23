@@ -100,6 +100,20 @@ if [ -n "${PRESET:-}" ]; then
 fi
 BUILD_OPTIONS="${OPTIONS:-$(forge_preset_options "${PRESET:-}")}"
 BUILD_OPTIONS="${BUILD_OPTIONS//,/ }"
+# REQUIRES in an option.conf pulls in another option, so a pairing that only makes sense together
+# does not depend on every preset remembering it (root without a terminal being the case in point).
+# One pass is deliberate: a chain deep enough to need recursion means the options are wrong.
+for _o in $BUILD_OPTIONS; do
+  _req=$(sed -n 's/^REQUIRES=//p' "$FORGE/options/$_o/option.conf" 2>/dev/null | tr -d '"' | tr ',' ' ')
+  for _r in $_req; do
+    case " $BUILD_OPTIONS " in
+      *" $_r "*) ;;
+      *) [ -d "$FORGE/options/$_r" ] || { echo "!! option $_o REQUIRES '$_r', which does not exist" >&2; exit 1; }
+         echo "   option $_o requires $_r -- adding it"
+         BUILD_OPTIONS="$BUILD_OPTIONS $_r" ;;
+    esac
+  done
+done
 # Signing is a per-checkout choice (device.conf.local), so say which one this build gets.
 if [ -n "${KEYS_DIR:-}" ]; then echo ">> signing: release keys from $KEYS_DIR"
 else echo ">> signing: AOSP test keys (set KEYS_DIR in device.conf.local for a publishable image)"; fi

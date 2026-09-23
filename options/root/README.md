@@ -35,3 +35,12 @@ happens" into "download Magisk and rewrite a finished zip".
 
 The APK is fetched and sha256-verified by `forge/prebuilt/fetch-magisk.sh`, never vendored. It is
 gitignored, and `sync-forge.sh` excludes it.
+
+## It brings a terminal
+
+`REQUIRES=termoneplus`. Root without a terminal is most of the way to useless, and leaving the
+pairing to each preset meant remembering it seven times. Adding `root` now adds TermOne Plus too,
+in any preset or via `EXTRA_OPTIONS`.
+
+TermOne Plus is no longer in any preset's own list for that reason -- it arrives with root, or you
+ask for it explicitly.

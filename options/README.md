@@ -181,3 +181,20 @@ Two intentional differences remain:
 - `setupwizard-lineage` (Lineage's SetupWizard over Google's on GApps builds) is COMMON on ether
   only; it has 18.1–20.0 patches and none for 22.2/23.2, so bonito and vs995 `full` builds run
   Google's wizard. To be revisited, not an oversight.
+
+## REQUIRES: one option pulling in another
+
+`option.conf` may name other options it cannot sensibly ship without:
+
+```
+REQUIRES=termoneplus
+```
+
+`bootstrap.sh` appends them to `BUILD_OPTIONS` before anything is staged, skipping any already
+present. The case it exists for is `root`: a rooted image with no terminal is a trap every preset
+kept having to remember, and forgetting it produced a build that looked complete and wasn't.
+
+Resolution is a **single pass**, deliberately. If an option needs a chain deep enough to require
+recursion, the options are wrong -- split them or merge them rather than teaching this to recurse.
+An unknown name is a hard error, not a warning: silently dropping a requirement is exactly the
+failure the field exists to prevent.
