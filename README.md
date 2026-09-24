@@ -440,6 +440,7 @@ GOTCHAS.md            known traps, indexed by symptom
 | [docs/porting-a-branch-bump.md](docs/porting-a-branch-bump.md) | Moving a device to a newer Android. Checks to run **before** the first build. |
 | [docs/debugging-a-vendor-blob.md](docs/debugging-a-vendor-blob.md) | A prebuilt HAL that worked on the old branch and crashes on the new one |
 | [docs/debugging-a-dead-panel.md](docs/debugging-a-dead-panel.md) | The screen goes black and stays black while the framework still reports the display on. |
+| [docs/debugging-volte.md](docs/debugging-volte.md) | IMS is present and running but the modem never registers, so calls fall back to circuit-switched. Reading registration off the wire instead of the framework's summary, and the two-legged availability gate that silently disables VoLTE. |
 | [docs/lineage-branches.md](docs/lineage-branches.md) | Choosing which branch to target — and avoiding a higher branch number that is actually older code. |
 | [docs/debugging-a-boot-loop.md](docs/debugging-a-boot-loop.md) | It builds but will not boot. Start with `/data/tombstones`, not pstore — and why USB adb may be impossible on your kernel. |
 | [docs/RELEASING.md](docs/RELEASING.md) | Publishing a build without handing out someone else's assets by accident. |
