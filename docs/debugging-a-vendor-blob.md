@@ -274,3 +274,33 @@ investigation down a blind alley. Ask the framework instead:
 configuration once, at boot. The experiment is a permissive *boot*. Restarting CNE under
 `setenforce 0` produced no change and briefly looked like evidence that sepolicy was not the
 problem; it was, and the fix was worth a build.
+
+## Sweep property *sets* separately from property *reads*
+
+They are different audit classes and they give you different information, and the one that is easier
+to read is the one people forget to look for.
+
+A read denial (`tclass=file`, tcontext `*_prop`) names the domain and the type and **never the
+property**, which is why it needs `prop-denials.sh` to resolve.
+
+A set denial (`tclass=property_service`) names the property outright:
+
+    avc: denied { set } for property=persist.audio.calfile0 pid=330
+         scontext=u:r:vendor_init:s0 tcontext=u:object_r:audio_prop:s0
+
+That one line was seven silently-unset ACDB calibration paths on a port -- the device's own speaker,
+handset, headset and Bluetooth audio calibration, set by its `init.qcom.rc` and refused, so the
+audio HAL had been running on generic tuning since the port began. Nobody had reported it as a bug,
+because audio worked; it just did not sound like the device.
+
+The cause is a type that AOSP retired: `vendor_init` used to be granted `exported_audio_prop`, that
+type was folded back into `audio_prop`, and a vendor rc written against the old world quietly stops
+working. Expect a crop of these whenever a port crosses a release boundary.
+
+So sweep for both, and note that a set denial is worth more per line:
+
+    logcat -b all -d | grep 'avc: *denied' | grep property_service   # names the property
+    logcat -b all -d | grep 'avc: *denied' | grep '_prop:'           # needs resolving
+
+And sweep for the classes that are neither, which on a mature port is a short and revealing list --
+`tclass=dir`, `tclass=sysfs`, anything that is not a property at all.
