@@ -4,9 +4,9 @@ A device's presets fall into two kinds, and only one kind should ever be publish
 
 | preset / switch | has | for |
 |---|---|---|
-| `full` | GApps, root, and the free apps (`device.conf.example`: Firefox, F-Droid, K-9, KDE Connect) | your own phone |
+| `full` | GApps, root, and the free apps (`device.conf.example`: F-Droid, K-9, KDE Connect, ConnectBot) | your own phone |
 | `clean` | none of that | the download page |
-| a free-apps-only preset (ether calls it `libre`: Firefox, F-Droid, K-9, TermOne Plus, KDE Connect, no Google, no root) | nothing proprietary | publishable too |
+| a free-apps-only preset (ether calls it `libre`: F-Droid, K-9, KDE Connect, ConnectBot, no Google, no root) | nothing proprietary | publishable too |
 | `EXTRA_OPTIONS=oem` | adds the manufacturer's reclaimed boot animation / wallpapers / sounds to any of them | your own phone only |
 
 `oem` is not a preset. `EXTRA_OPTIONS` adds an option to whichever preset you build, and every
