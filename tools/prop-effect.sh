@@ -107,9 +107,20 @@ if [ -n "$LABEL" ]; then
   if [ -n "$DEN" ]; then
     printf '   %s\n' "$DEN"
     echo
-    echo "   A reader in a denied domain sees nothing. Add get_prop(<domain>, $TYPE) -- and if you"
-    echo "   just moved this property to a new type, check EVERY domain that could read it before,"
-    echo "   not only the one you were fixing. Relabelling takes access away as well as granting it."
+    echo
+    echo "   A reader in a denied domain sees nothing."
+    if [ "$TYPE" = "default_prop" ]; then
+      echo "   Do NOT fix this with get_prop(<domain>, default_prop): that grants read access to every"
+      echo "   unlabelled property on the system. Give this prefix its own type in property_contexts"
+      echo "   and grant that instead."
+      echo "   Note how many domains appear above -- a long list is a systemic gap in the port, not"
+      echo "   one bug, and the other entries are probably breaking features nobody has looked at."
+    else
+      echo "   Add get_prop(<domain>, $TYPE)."
+    fi
+    echo "   If you just moved this property onto a new type, check EVERY domain that could read it"
+    echo "   before, not only the one you were fixing: relabelling takes access away as well as"
+    echo "   granting it."
   else
     echo "   none seen (dmesg may have wrapped -- reproduce, then re-run)"
   fi
