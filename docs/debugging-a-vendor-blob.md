@@ -7,6 +7,35 @@ subsystem is dead and the logs do not explain it.
 
 The worked example throughout is a camera HAL that segfaulted on lineage-24.0 and worked on 22.2.
 
+## Start with the symbol gap
+
+`tools/abi-gap.sh <blob>` lists the symbols a prebuilt imports that the running platform no longer
+exports. It pulls the blob and its `DT_NEEDED` set off the device, because the device is the only
+authoritative answer to "what does this ROM export". Run it before forming any theory -- it is
+thirty seconds and it either hands you the answer or rules out a whole class of cause.
+
+    abi-gap.sh /vendor/lib64/libimsmedia_jni.so
+    >> libimsmedia_jni.so: imports 18 symbols, 1 unresolved
+       _ZN7android7SurfaceC1ERKNS_2spINS_22IGraphicBufferProducerEEEb
+           android::Surface::Surface(android::sp<android::IGraphicBufferProducer> const&, bool)
+
+Three things it taught us on ether that generalise:
+
+- **A blob that looks fatal may not be in the path you care about.** `lib-imsvt.so` had 61
+  unresolved symbols, which reads as hopeless -- but nothing links it and it is dlopened only on a
+  code path we did not need. The library that actually gated startup needed one symbol. Check what
+  is in the load path before costing the work.
+- **Separate "removed subsystem" from "moved library".** Of those 61, most were `Rcc*` symbols from
+  a vendor library we had simply forgotten to extract. The remainder were `IOMXObserver` and
+  `IGraphicBufferAlloc` -- platform APIs deleted outright. The first is a one-line fix, the second
+  is unfixable, and the counts alone do not distinguish them.
+- **An empty report does not mean the blob works.** See the script header: nanopb kept every symbol
+  name across a version bump and changed what the bytes behind them meant.
+
+The trap worth repeating, because the script exists and still got it wrong once: **`comm` on
+unsorted input silently lies.** Sort both sides, with `LC_ALL=C`, and sanity-check any scan against
+a case whose answer you already know before believing a clean result.
+
 ## Get a reference before you theorise
 
 Park the old branch on the inactive slot and boot it. Same phone, same blob, one variable changed.

@@ -2,7 +2,10 @@
 # refresh-patches.sh — re-export overlay/patches/ from the local commits sitting on top of upstream
 # in each patched project.
 #
-#   ./forge/tools/refresh-patches.sh [--dry-run] [--force] [AOSP_ROOT]
+#   ./forge/tools/refresh-patches.sh [--dry-run] [--force] [--adopt] [AOSP_ROOT]
+#
+# --adopt also exports projects that have local commits but no patches yet. Without it they are
+# only reported, and the script exits non-zero so a preflight notices.
 #
 # WHICH DIRECTION THIS GOES, because it only goes one way:
 #
@@ -33,11 +36,12 @@ set -euo pipefail
 # things these tools unpack (ROM zips, images, trees) fill it.
 export TMPDIR="${BUILD_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)/build_output}/tmp"; mkdir -p "$TMPDIR"
 
-DRY=0; FORCE=0; ARG=""
+DRY=0; FORCE=0; ADOPT=0; ARG=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --dry-run) DRY=1; shift;;
     --force)   FORCE=1; shift;;
+    --adopt)   ADOPT=1; shift;;
     -h|--help) sed -n '2,40p' "$0" | sed 's/^# \{0,1\}//'; exit 0;;
     *) ARG="$1"; shift;;
   esac
@@ -178,5 +182,39 @@ PROJECTS="${PATCHED_PROJECTS:-}"
 for proj in $(printf '%s\n' $PROJECTS | sort -u); do
   refresh "$proj"
 done
+
+# Anything with local commits but NO patches yet is invisible to the union above, because that union
+# is seeded from patches that already exist. That is not hypothetical: on ether, Trebuchet,
+# lineage-sdk and SetupWizard carried ten commits for three weeks with no patch directory, and a
+# fresh bootstrap would have silently dropped every one of them. So sweep for unbacked work and say
+# so loudly; --adopt exports it.
+#
+# Compare against refs/remotes/m/<branch>, not @{u}: repo projects have no upstream set, so
+# `git log @{u}..HEAD` reports nothing at all and the scan passes while finding nothing.
+echo ">> scanning for projects with local commits but no patches"
+UNBACKED=""
+while read -r gitdir; do
+  proj="${gitdir%/.git}"; proj="${proj#./}"
+  case " $PROJECTS " in *" $proj "*) continue ;; esac
+  mref=$(git -C "$AOSP/$proj" for-each-ref --format='%(refname:short)' refs/remotes/m/ 2>/dev/null | head -1)
+  [ -n "$mref" ] || continue
+  n=$(git -C "$AOSP/$proj" log --oneline "$mref..HEAD" 2>/dev/null | wc -l)
+  [ "$n" -gt 0 ] || continue
+  UNBACKED="$UNBACKED $proj"
+  echo "   !! $proj has $n local commit(s) and no patches"
+  git -C "$AOSP/$proj" log --oneline "$mref..HEAD" 2>/dev/null | sed 's/^/        /'
+done <<EOF
+$(cd "$AOSP" 2>/dev/null && find . -maxdepth 5 -name .git 2>/dev/null)
+EOF
+if [ -n "$UNBACKED" ]; then
+  if [ "${ADOPT:-0}" = "1" ]; then
+    for proj in $UNBACKED; do refresh "$proj"; done
+  else
+    echo "   run with --adopt to export these, or they will be lost on the next clean bootstrap" >&2
+    RC=1
+  fi
+else
+  echo "   none"
+fi
 [ "$RC" -eq 0 ] || echo "!! one or more projects were skipped -- see above. Nothing was lost." >&2
 exit $RC
