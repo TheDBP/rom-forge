@@ -25,6 +25,7 @@ container.
 | `unpack-block-ota.sh` | when flashing | partition images out of a `payload.bin` OTA, for fastboot-only flashing |
 | `check-sigpipe.sh` | before committing | pipelines that will die silently under `set -o pipefail` |
 | `dev-shell.sh` | any time | an interactive shell in the build container |
+| `publish-kernel-source.sh` | before publishing a build | the kernel you actually shipped, as a normal kernel repo: upstream history with this device's patch series replayed on top. GPL asks for the *corresponding* source, and a link to upstream alone does not answer it once you patch the kernel. Regenerated from base+patches every run, so the published tree cannot drift from what you build |
 | `make-keys.sh` | once, before the first release | signing keys in a directory outside every repo; point `KEYS_DIR` at it in `device.conf.local` |
 | `new-device-repo.sh` | once, at the start | scaffolds a device repo, vendors `forge/`, and with `--codename` fills in `device.conf` and the local manifest by looking the device up |
 
