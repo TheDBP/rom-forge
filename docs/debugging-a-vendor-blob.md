@@ -193,3 +193,84 @@ adb shell mount --bind /data/local/tmp/libfoo.so /vendor/lib64/libfoo.so
 Fix by pinning the vendor copy to the old ABI. A whole-tree revert of the upgrade is the expedient
 version; the upstreamable one is a vendor variant built from the old source, leaving the platform
 on the new one.
+
+## A property its reader cannot see is a silent no-op
+
+Setting a property and getting no behaviour change has three possible causes, and people usually
+only check the first two:
+
+1. the value is wrong
+2. nothing reads it
+3. **the thing that reads it is not allowed to**
+
+(3) produces no error, no log line, and no clue. The property reads back correctly with `getprop`
+from your root shell, because *you* are allowed to read it. The daemon that matters is not.
+
+It happens because `property_contexts` is prefix-matched and anything unmatched falls through to
+`default_prop`, which plenty of vendor domains are refused:
+
+    $ getprop -Z persist.cne.feature
+    u:object_r:default_prop:s0
+    $ dmesg | grep 'avc: denied.*cnd'
+    avc: denied { read } comm="cnd" tcontext=u:object_r:default_prop:s0
+
+`persist.cne.feature=1` was set for the entire life of that port and the Connectivity Engine never
+saw its own master switch. Everything downstream then behaved *correctly* for a daemon whose feature
+flag is off, which is what makes this expensive: there is no misbehaviour to chase, only an absence.
+
+`tools/prop-effect.sh <property>` answers all three questions at once — value, label, every binary
+in the image that references it, and any denial on that type.
+
+Two rules that follow:
+
+- **Give the prefix its own type; do not widen `default_prop`.** Granting a domain `default_prop`
+  hands it read access to every unlabelled property on the system.
+- **Relabelling takes access away as well as granting it.** Moving `persist.cne.*` to a new type
+  fixed `cnd` and broke the framework-side service that read the same names through `default_prop`,
+  which showed up as a fresh denial on the next boot. Before relabelling, list *every* domain that
+  can currently read the property, not just the one you are fixing.
+
+## Find out who reads a property before you set it
+
+A property in stock's `build.prop` is not evidence that anything in *your* image consumes it. Two
+were copied across on one port; one was real and one was furniture:
+
+    $ strings -a vendor/bin/netmgrd | grep '^persist\.'
+    persist.data.iwlan.enable          <- real, netmgrd and qmuxd both read it
+    ...
+    $ grep -rl persist.radio.app_hw_mbn_path system/ vendor/
+    (nothing)                          <- furniture; and stock's value pointed at a path that
+                                          did not exist on this device either
+
+The same `strings` pass hands you the neighbouring names, and the real switch is usually among them:
+searching for `persist.data.iwlan.enable` also turned up `persist.data.iwlan.ims.enable`,
+`persist.vendor.cnd.iwlan` and `persist.vendor.cnd.wqe`, none of which were in stock's `build.prop`
+at all.
+
+## Silence from a daemon is not evidence that it is idle
+
+Some QTI daemons do not log to logcat. CNE logs through `CneLogDiagAdditional::printLog`, i.e. to
+diag/QXDM, so `logcat | grep cnd` is empty no matter what it is doing. Check for a diag logging
+class in the blob before concluding a daemon is asleep:
+
+    strings -a vendor/lib64/lib<x>.so | grep -iE 'LogDiag|printLog|QXDM'
+
+The giveaway that this is expected rather than broken: stock sets a QXDM logging property for it
+(`persist.cne.logging.qxdm=3974`).
+
+## The process name is not the package name
+
+`ps -A | grep cne` finds nothing on a device where CNEService is running perfectly well, because it
+is hosted in a process called `.dataservices`. Concluding "the service is dead" from `ps` sent one
+investigation down a blind alley. Ask the framework instead:
+
+    dumpsys activity processes | grep -B6 'class=com.quicinc.cne'
+    *PERS* UID 1000 ProcessRecord{...:.dataservices}
+      class=com.quicinc.cne.CNEService.CNEServiceApp
+
+## A permissive restart is not a permissive boot
+
+`setenforce 0` followed by restarting the daemon tests almost nothing if the daemon reads its
+configuration once, at boot. The experiment is a permissive *boot*. Restarting CNE under
+`setenforce 0` produced no change and briefly looked like evidence that sepolicy was not the
+problem; it was, and the fix was worth a build.

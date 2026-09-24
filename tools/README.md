@@ -18,7 +18,9 @@ container.
 | `check-image-labels.sh` | when packaging fails | every unlabeled path at once, instead of one per build |
 | `ota-extract.sh` | when you need a reference ROM | partitions out of a signed A/B OTA, and optionally flashed to one slot so you can keep a known-good build on the inactive slot |
 | `slot-switch.sh` | when you need the other slot's ROM to boot | the device moved to the other slot with the shared `/data` wiped and the setup wizard skipped, because the older ROM stops booting once the newer one has initialised user 0 |
+| `prop-effect.sh` | when a property you set changed nothing | its value, its SELinux type, every binary in the image that reads it, and any domain denied that type. The third is the silent case: a property whose reader cannot see it behaves exactly like one you never set |
 | `blob-attach.sh` | when a prebuilt HAL crashes | a vendor binary under `lldb-server` with its library load base printed, so absolute breakpoints work in a stripped blob |
+| `fb-capture.sh` | when you need to see the screen and there is no `screencap` | a PNG of `/dev/graphics/fb<N>`, with the line stride read from sysfs rather than assumed. For recovery and early boot; a booted Android returns ENODEV because SurfaceFlinger owns the panel |
 | `boot-window-logcat.sh` | when a boot ends in a reboot | the logcat, dmesg and properties of each window adbd is reachable, one set per appearance — the route that does not depend on the ramoops region surviving the reboot |
 | `repack-erofs-apex.sh` | when a prebuilt APEX will not mount | that apex rebuilt with an ext4 payload and re-signed, for a kernel with no CONFIG_EROFS_FS -- apexd's "No such device" with everything inside the apex silently absent |
 | `make-apex-key.sh` | before the first EROFS repack | the four-file signing key that repack needs, made once on the host because KEYS_DIR is read-only in the container |
