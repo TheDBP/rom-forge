@@ -182,6 +182,24 @@ PROJECTS="${PATCHED_PROJECTS:-}"
 for proj in $(printf '%s\n' $PROJECTS | sort -u); do
   refresh "$proj"
 done
+# Normalised to single-space separation for the membership test below. $PROJECTS is newline
+# separated (find output), and `case " $PROJECTS " in *" $p "*)` never matches across a newline,
+# which silently reports every already-patched project as unbacked.
+PROJECTS_FLAT=" $(printf '%s\n' $PROJECTS | sort -u | tr '\n' ' ') "
+
+# Patches live in TWO places, and a scan that knows about only one raises false alarms that look
+# exactly like lost work. overlay/patches/ holds device patches; forge/options/<opt>/patches/<branch>/
+# holds option patches, applied conditionally from COMMON_OPTIONS/PRESET. A project patched solely by
+# an enabled option has commits in the tree and nothing under overlay/patches -- which is correct,
+# not drift. Exporting it to overlay/patches duplicates the option and the two then fight on the
+# next bootstrap.
+OPT_PROJECTS=""
+if [ -d "$FORGE/options" ] && [ -n "${BRANCH:-}" ]; then
+  OPT_PROJECTS="$(cd "$FORGE/options" 2>/dev/null && \
+    find . -path "*/patches/$BRANCH/*" -name '*.patch' -printf '%h\n' 2>/dev/null \
+    | sed "s#^\./[^/]*/patches/$BRANCH/##" | sort -u)"
+fi
+OPT_FLAT=" $(printf '%s\n' $OPT_PROJECTS | sort -u | tr '\n' ' ') "
 
 # Anything with local commits but NO patches yet is invisible to the union above, because that union
 # is seeded from patches that already exist. That is not hypothetical: on ether, Trebuchet,
@@ -195,7 +213,8 @@ echo ">> scanning for projects with local commits but no patches"
 UNBACKED=""
 while read -r gitdir; do
   proj="${gitdir%/.git}"; proj="${proj#./}"
-  case " $PROJECTS " in *" $proj "*) continue ;; esac
+  case "$PROJECTS_FLAT" in *" $proj "*) continue ;; esac
+  case "$OPT_FLAT"      in *" $proj "*) continue ;; esac
   mref=$(git -C "$AOSP/$proj" for-each-ref --format='%(refname:short)' refs/remotes/m/ 2>/dev/null | head -1)
   [ -n "$mref" ] || continue
   n=$(git -C "$AOSP/$proj" log --oneline "$mref..HEAD" 2>/dev/null | wc -l)
