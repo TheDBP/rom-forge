@@ -39,6 +39,15 @@ if [ "$PUSH" = 1 ] && [ -n "$(git log '@{u}..HEAD' --oneline 2>/dev/null)" ]; th
   exit 1
 fi
 
+# The tool index is generated, so it can silently fall behind the tools it describes. Check it here
+# rather than trusting anyone to remember: this is the gate every engine change passes through on
+# its way to the device repos, so an index that lies cannot get past it.
+if ! "$(dirname "$0")/gen-tool-index.py" --check >/dev/null 2>&1; then
+  echo "!! the tool index is out of date" >&2
+  "$(dirname "$0")/gen-tool-index.py" --check 2>&1 | sed 's/^/   /' >&2
+  exit 1
+fi
+
 if [ ${#TARGETS[@]} -eq 0 ]; then
   for d in "$FORGE/../"*/; do
     [ -f "$d/device.conf" ] && [ -f "$d/forge/FORGE_REF" ] && TARGETS+=("$d")
