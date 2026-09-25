@@ -290,7 +290,10 @@ int main(int argc, char **argv) {
 
         uint8_t rreq[32];
         n = efs_hdr(rreq, EFS2_READ);
-        uint32_t nbyte = 256; int32_t off = 0;
+        /* EFS files here run to a few hundred bytes; 256 silently truncated the interesting ones.
+         * Overridable so a larger item can be pulled without a rebuild. */
+        uint32_t nbyte = argc > 3 ? (uint32_t)strtoul(argv[3], NULL, 0) : 2048;
+        int32_t off = 0;
         memcpy(rreq + n, &fd, 4); n += 4;
         memcpy(rreq + n, &nbyte, 4); n += 4;
         memcpy(rreq + n, &off, 4); n += 4;
@@ -303,6 +306,10 @@ int main(int argc, char **argv) {
         printf("raw reply: "); hexdump(rsp, m);
         if (nread > 0 && 20 + nread <= m) {
             printf("value hex: "); hexdump(rsp + 20, nread);
+            printf("text: ");
+            for (int i = 0; i < nread; i++)
+                putchar((rsp[20+i] >= 32 && rsp[20+i] < 127) || rsp[20+i] == 10 ? rsp[20+i] : '.');
+            printf("\n");
             if (nread <= 8) {
                 uint64_t v = 0;
                 for (int i = 0; i < nread; i++) v |= (uint64_t)rsp[20 + i] << (8 * i);
