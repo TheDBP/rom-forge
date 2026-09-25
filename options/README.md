@@ -172,7 +172,8 @@ on the branch being built; doing less is a legitimate shape.
 `COMMON_OPTIONS` is unioned into every preset by `forge_preset_options`, so anything put there
 lands in `clean` too. App packages do not belong in it — that is how `clean` builds once shipped
 F-Droid. The look-and-behaviour set (`dark-default`, `home-defaults`, `nav-icons`, `teal-*`,
-`themed-icons`, …) is COMMON on every device: it is the brand, not a per-device taste.
+`themed-icons`, `pong-notification`, …) is COMMON on every device: it is the brand, not a
+per-device taste.
 
 Two intentional differences remain:
 
