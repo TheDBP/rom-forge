@@ -4,7 +4,7 @@
 or run it with `--check` to find out whether this file is stale. `propagate-forge.sh`
 does that automatically, so an engine change cannot ship with an index that lies.
 
-48 tools. Each row is `| name | what it does | usage | docs |` with a fixed column count
+49 tools. Each row is `| name | what it does | usage | docs |` with a fixed column count
 and any literal pipe escaped, so `awk -F'|'` is enough to parse it. `docs/tools.yaml`
 carries the same data for anything that would rather not parse Markdown.
 
@@ -24,6 +24,7 @@ carries the same data for anything that would rather not parse Markdown.
 | [`check-sigpipe.sh`](../tools/check-sigpipe.sh) | fail if any shell script that runs under `set -o pipefail` pipes into `grep -q` or `head` | `check-sigpipe.sh` | — |
 | [`check-tree-dirt.sh`](../tools/check-tree-dirt.sh) | every uncommitted change in a patched project should have been put there by forge | `check-tree-dirt.sh [AOSP_ROOT]` | — |
 | [`dev-shell.sh`](../tools/dev-shell.sh) | authoring container. Host needs only Docker. Runs the build image with the repos root mounted at /repos: clone/edit/format-patch/git-am/commit in-container. Only `git push` uses host auth (GH_TOKEN, else `gh auth token`). dev-shell.sh [cmd...]   # no args = interactive shell Env: REPOS (default: parent of this repo), IMAGE (default aosp-los22:24.04), GH_TOKEN | `dev-shell.sh [cmd...]   # no args = interactive shell` | — |
+| [`diag-efs.sh`](../tools/diag-efs.sh) | read a modem EFS/NV item file over /dev/diag, on a connected device | `diag-efs.sh <buildid\|hello\|read PATH\|probe HEX>` | — |
 | [`dtbo-ramoops-alt.py`](../tools/dtbo-ramoops-alt.py) | make the live ramoops console survive a clean reboot | `dtbo-ramoops-alt.py <dtbo.img> <out.img> [--index N]` | [debugging-a-boot-loop](debugging-a-boot-loop.md), [porting-a-branch-bump](porting-a-branch-bump.md) |
 | [`extract-gapps-apps.sh`](../tools/extract-gapps-apps.sh) | pull the Google versions of the stock apps out of a GApps zip and stage them as /product prebuilts, so a WITH_GAPPS build swaps the Lineage/AOSP apps for Google's | `extract-gapps-apps.sh` | — |
 | [`extract-nextbit-oem-assets.sh`](../tools/extract-nextbit-oem-assets.sh) | reclaim the Nextbit Robin OEM assets (system sounds, wallpapers, boot animation) from a Nextbit Robin stock ROM and bake them into the tree being built | `extract-nextbit-oem-assets.sh` | [OEM-ASSETS](OEM-ASSETS.md) |

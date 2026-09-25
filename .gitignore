@@ -11,3 +11,4 @@ prebuilt/Magisk-*.apk
 # In-place device configs (bootstrap.sh --device). Yours, not the engine's -- keep them in your
 # own repo if you want them version-controlled; see README "Setting up a device".
 devices/
+tools/diag-efs/diag-efs.aarch64
