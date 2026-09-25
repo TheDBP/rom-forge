@@ -54,6 +54,13 @@ _fdroid_java() {
   [ -x "$j" ] && { echo "$j"; return; }
   command -v java
 }
+# True when this tree's Soong understands skip_preprocessed_apk_checks. Checked against the source
+# rather than inferred from the branch name, so a backport or a new branch is picked up for free.
+_fdroid_soong_has_skip_checks() {
+  grep -rqs 'SkipPreprocessedApkChecks\|skip_preprocessed_apk_checks' \
+    "${AOSP:-/aosp}/build/soong" 2>/dev/null
+}
+
 _fdroid_apksigner_jar() { echo "${AOSP:-/aosp}/prebuilts/sdk/tools/linux/lib/apksigner.jar"; }
 _fdroid_zipalign() { echo "${AOSP:-/aosp}/prebuilts/build-tools/linux-x86/bin/zipalign"; }
 
@@ -218,7 +225,12 @@ fdroid_bp_module() {  # FILE NAME APK PKG UNPACKED [EXTRA_PROPERTY...]
     echo "    apk: \"$apk\","
     echo "    presigned: true,"
     echo "    preprocessed: true,"
-    [ -n "$skip" ] && echo "    skip_preprocessed_apk_checks: true, // $skip"
+    # skip_preprocessed_apk_checks exists only where Soong has the check it bypasses. It is valid on
+    # lineage-24.0 and absent on lineage-20.0 (Android 13), where emitting it fails the build outright
+    # with "unrecognized property" -- and check_prebuilt_presigned_apk.py, the thing it would bypass,
+    # is not there either, so omitting it loses nothing. Ask the tree rather than assume the branch.
+    [ -n "$skip" ] && _fdroid_soong_has_skip_checks && \
+      echo "    skip_preprocessed_apk_checks: true, // $skip"
     echo "    product_specific: true,"
     echo "    enforce_uses_libs: false,"
     for p in "$@"; do echo "    $p"; done
