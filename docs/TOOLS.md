@@ -43,7 +43,7 @@ carries the same data for anything that would rather not parse Markdown.
 | [`new-device-repo.sh`](../tools/new-device-repo.sh) | scaffold a device repo from scratch | `new-device-repo.sh` | — |
 | [`ota-extract.sh`](../tools/ota-extract.sh) | pull the partition images out of a signed A/B OTA zip, and optionally flash them to one slot | `ota-extract.sh <ota.zip> <outdir> [--flash a\|b] [--os-only] [-s SERIAL]` | [debugging-a-vendor-blob](debugging-a-vendor-blob.md) |
 | [`pixel-ramoops-pull.sh`](../tools/pixel-ramoops-pull.sh) | decrypt the panic log a Pixel's bootloader saved, from recovery | `pixel-ramoops-pull.sh --genkey <keydir>          once: make a keypair, load its pubkey` | — |
-| [`pmsg-decode.py`](../tools/pmsg-decode.py) | pmsg-decode.py <pmsg-ramoops-N> [out.txt] | `pmsg-decode.py` | — |
+| [`pmsg-decode.py`](../tools/pmsg-decode.py) | decode a pstore pmsg record into readable logcat text | `pmsg-decode.py <pmsg-ramoops-N> [out.txt]` | — |
 | [`prop-denials.sh`](../tools/prop-denials.sh) | turn "N domains are denied a property type" into "these domains want these specific properties", so you can label the prefixes instead of widening the type | `prop-denials.sh [--image DIR] [-s SERIAL] [--type TYPE]` | [debugging-a-vendor-blob](debugging-a-vendor-blob.md) |
 | [`prop-effect.sh`](../tools/prop-effect.sh) | answer "I set this property and nothing happened" properly, instead of setting more properties | `prop-effect.sh <property> [--image DIR] [-s SERIAL]` | [debugging-a-vendor-blob](debugging-a-vendor-blob.md) |
 | [`propagate-forge.sh`](../tools/propagate-forge.sh) | push an engine change out to every device repo, now | `propagate-forge.sh` | — |

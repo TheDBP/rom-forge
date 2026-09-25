@@ -186,8 +186,8 @@ tools:
     docs: []
   - name: "pmsg-decode.py"
     path: "tools/pmsg-decode.py"
-    summary: "pmsg-decode.py <pmsg-ramoops-N> [out.txt]"
-    usage: "pmsg-decode.py"
+    summary: "decode a pstore pmsg record into readable logcat text"
+    usage: "pmsg-decode.py <pmsg-ramoops-N> [out.txt]"
     docs: []
   - name: "prop-denials.sh"
     path: "tools/prop-denials.sh"

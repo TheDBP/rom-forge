@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""pmsg-decode.py <pmsg-ramoops-N> [out.txt]
+"""pmsg-decode.py — decode a pstore pmsg record into readable logcat text.
+
+  pmsg-decode.py <pmsg-ramoops-N> [out.txt]
 
 Decode a pstore pmsg record (the /dev/pmsg0 ring liblog writes every log line into) to
 threadtime-style text. This is the last boot's logcat, including debuggerd tombstone output

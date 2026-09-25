@@ -147,7 +147,24 @@ def main():
                 print("!! %s is out of date" % p)
             print("   run tools/gen-tool-index.py to regenerate")
             return 1
-        print(">> tool index is current (%d tools)" % len(rows))
+        # The generated files cannot drift, but tools/README.md is hand-written and silently does:
+        # six tools were missing from its Quick reference before this check existed. A tool nobody can
+        # find is a tool nobody uses, so an unlisted one fails the check rather than passing as a nit.
+        missing = []
+        try:
+            with open('tools/README.md', encoding='utf-8') as fh:
+                readme = fh.read()
+        except FileNotFoundError:
+            readme = None
+        if readme is not None:
+            missing = [base for base, _p, _s, _u, _d in rows if base not in readme]
+        if missing:
+            for m in missing:
+                print("!! %s is not listed in tools/README.md" % m)
+            print("   add a row to its Quick reference table, or the tool is undiscoverable")
+            return 1
+        print(">> tool index is current (%d tools), and every tool is listed in tools/README.md"
+              % len(rows))
         return 0
 
     os.makedirs('docs', exist_ok=True)

@@ -64,6 +64,12 @@ Bringing a kernel up to a newer branch (the *kernel gate* of a port — see
 | `pixel-ramoops-pull.sh` | Pixel 3/3a class, after a *panic* | the encrypted klog the bootloader saved, decrypted with your own key |
 | `super-loop-mount.sh` | from recovery | a logical partition of the inactive slot mounted rw without device-mapper — edit `init.rc`, push a binary, chroot into it |
 | `usb-watch.sh` | during a boot attempt | timestamped USB/adb/fastboot transitions: how long until the bootloader, whether adbd ever appeared |
+| `prop-denials.sh` | when a property read is denied | which properties that domain actually wants that carry the refused type, so you label prefixes instead of granting `default_prop` and handing it everything unlabelled |
+| `check-patch-series.sh` | after regenerating patches | pairs where a later patch undoes an earlier one — one change written twice, which a replayed series cannot express |
+| `diag-efs.sh` | when a modem feature never runs | the modem's own EFS/NV items, read and written over `/dev/diag`. Tells "the modem refused" from "the modem was never told", which look identical from outside |
+| `mcfg-items.py` | when a feature works on one device and not another with the same modem | the EFS items a Qualcomm MCFG provisions, with values, without flashing it — diff carrier provisioning instead of cross-flashing firmware |
+| `pmsg-decode.py` | when a boot never reached adb | the previous boot's logcat out of a pstore pmsg record, tombstones included |
+| `gen-tool-index.py` | after adding a tool or a doc | `docs/TOOLS.md` and `docs/tools.yaml` regenerated; `--check` fails if either is stale or a tool is missing from this table |
 
 ## Assessing a port
 
