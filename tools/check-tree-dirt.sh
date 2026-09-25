@@ -71,8 +71,13 @@ done >> "$W/allow"
 # would reduce to a bare "*", which matches every path and silently turns this whole check into a
 # no-op -- so those are dropped instead. (Found by the negative test below; before this the check
 # passed on any input, including a file planted specifically to be caught.)
-sed -i -E 's|\$\{[^}]*\}.*|*|; s|\$[A-Za-z_][A-Za-z0-9_]*.*|*|' "$W/allow"
-sed -i -E '/^\*$/d; /^$/d' "$W/allow"
+# Replace each unexpanded variable with a single "*" and KEEP the rest of the path. Truncating to
+# end-of-line instead turns device/${DEVICE}/firefox into "device/*", which allows every path under
+# device/ -- a second way of quietly making this check a no-op, and one the negative test caught
+# only because the planted file happened to live there. Entries left with no literal component at
+# all are dropped.
+sed -i -E 's|\$\{[^}]*\}|*|g; s|\$[A-Za-z_][A-Za-z0-9_]*|*|g' "$W/allow"
+sed -i -E '\|^[*/]*$|d; /^$/d' "$W/allow"
 sort -u "$W/allow" -o "$W/allow"
 NALLOW=$(grep -c . "$W/allow" || true)
 echo ">> $NALLOW generated paths declared by forge options"
@@ -81,19 +86,13 @@ attributed() {           # $1 = path relative to AOSP root
   local p="$1" a
   while read -r a; do
     [ -n "$a" ] || continue
-    case "$a" in
-      # a prefix wildcard with nothing before it would match everything; refuse it
-      \*) continue ;;
-      *\*) [ -n "${a%\*}" ] || continue
-           case "$p" in ${a%\*}*) return 0 ;; esac ;;
-      *)   [ "$p" = "$a" ] && return 0
-           # the dirty path is inside a generated directory
-           case "$p" in "$a"/*) return 0 ;; esac
-           # ...or IS a directory that generated paths live under. git collapses an untracked
-           # directory to its top entry, so a tree full of downloaded prebuilts is reported as the
-           # single path "vendor/lineage/prebuilts" while every declaration names a child of it.
-           case "$a" in "$p"/*) return 0 ;; esac ;;
-    esac
+    # glob match: the entry may contain "*" where an unexpanded variable was
+    # shellcheck disable=SC2053
+    [[ $p == $a ]]   && return 0   # the path itself is generated
+    # shellcheck disable=SC2053
+    [[ $p == $a/* ]] && return 0   # the path sits inside a generated directory
+    # shellcheck disable=SC2053
+    [[ $a == $p/* ]] && return 0   # the path IS a directory generated paths live under
   done < "$W/allow"
   return 1
 }
