@@ -140,7 +140,12 @@ forge_preset_options() {
     # forgotten, and a "stock" image carrying oem or gapps would be a lie in the filename.
     [ -z "${EXTRA_OPTIONS:-}" ] || \
       echo "   note: preset $FORGE_STOCK_PRESET ignores EXTRA_OPTIONS='${EXTRA_OPTIONS}' -- stock takes no options" >&2
-    printf ''; return 0
+    # STOCK_OPTIONS is the device saying "these are not extras, they are part of the phone working at
+    # all". ether names setup-mobile-data: without it Lineage's SetupWizard leaves mobile data off, and
+    # a stock image that comes up unable to reach the network is not the working phone stock exists to
+    # prove. Empty everywhere else, so no other device changes. The tag stays plain `stock`: these are
+    # behavioural patches, not payload, and the audit this guards is about redistributable content.
+    printf '%s' "$(printf '%s' "${STOCK_OPTIONS:-}" | tr ',' ' ')"; return 0
   fi
   own="$(forge_preset_field "$1" options | tr ',' ' ')" || return 1
   common="$(printf '%s' "${COMMON_OPTIONS:-}" | tr ',' ' ')"
