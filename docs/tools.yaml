@@ -80,7 +80,7 @@ tools:
   - name: "diag-efs.sh"
     path: "tools/diag-efs.sh"
     summary: "read a modem EFS/NV item file over /dev/diag, on a connected device"
-    usage: "diag-efs.sh <buildid|hello|read PATH|probe HEX>"
+    usage: "diag-efs.sh <buildid|hello|ls DIR|read PATH|write PATH HEX [OFLAG MODE]|rm PATH|probe HEX>"
     docs: []
   - name: "dtbo-ramoops-alt.py"
     path: "tools/dtbo-ramoops-alt.py"

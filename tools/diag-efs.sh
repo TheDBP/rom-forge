@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
 # diag-efs.sh — read a modem EFS/NV item file over /dev/diag, on a connected device.
 #
-#   diag-efs.sh <buildid|hello|read PATH|probe HEX>
+#   diag-efs.sh <buildid|hello|ls DIR|read PATH|write PATH HEX [OFLAG MODE]|rm PATH|probe HEX>
 #
 # buildid prints the modem build id, which is a sanity check with a known answer -- if that is
 # wrong, nothing below it is trustworthy. read takes an item path and prints hex and decimal.
-# probe sends a raw diag payload and prints every reply, including the error answers.
+# probe sends a raw diag payload and prints every reply, including the error answers. write creates
+# the item if absent; EFS2's oflag values are Linux-style, so O_WRONLY|O_CREAT is 0x41, which is the
+# default. Verify every write by reading it back -- a write can report success having gone nowhere.
+#
+# Before writing anything, check the modem actually READS the item: `strings` the modem image for the
+# item name. An EFS tree accumulates items from older firmware and from AP-side provisioning tools,
+# and an item no build references can be written all day with no effect.
 #
 # WHY
 #

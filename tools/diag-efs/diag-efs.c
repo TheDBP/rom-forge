@@ -45,6 +45,11 @@
 #define EFS2_OPEN  2
 #define EFS2_CLOSE 3
 #define EFS2_READ  4
+#define EFS2_WRITE 5
+#define EFS2_UNLINK 8
+#define EFS2_OPENDIR  11
+#define EFS2_READDIR  12
+#define EFS2_CLOSEDIR 13
 
 static int g_fd = -1;
 
@@ -310,6 +315,102 @@ int main(int argc, char **argv) {
         memcpy(creq + n, &fd, 4); n += 4;
         diag_send(creq, n);
         diag_recv(creq, 4, rsp, sizeof(rsp), 2);
+    } else if (!strcmp(argv[1], "ls") && argc > 2) {
+        do_hello(rsp, sizeof(rsp));
+        uint8_t req[512];
+        int n = efs_hdr(req, EFS2_OPENDIR);
+        size_t pl = strlen(argv[2]) + 1;
+        memcpy(req + n, argv[2], pl); n += pl;
+        if (diag_send(req, n) < 0) goto out;
+        int m = diag_recv(req, 4, rsp, sizeof(rsp), 4);
+        if (m < 12) { fprintf(stderr, "opendir: no reply\n"); goto out; }
+        uint32_t dirp; int32_t eno;
+        memcpy(&dirp, rsp + 4, 4); memcpy(&eno, rsp + 8, 4);
+        printf("opendir dirp=%u errno=%d\n", dirp, eno);
+        if (eno != 0) goto out;
+        /* The numeric fields of a readdir reply are not worth trusting blind, but the entry name is
+         * the last thing in the packet, so take the trailing NUL-terminated string instead of
+         * indexing at a guessed offset. */
+        for (int32_t seq = 1; seq < 300; seq++) {
+            uint8_t rq[32];
+            int k = efs_hdr(rq, EFS2_READDIR);
+            memcpy(rq + k, &dirp, 4); k += 4;
+            memcpy(rq + k, &seq, 4);  k += 4;
+            if (diag_send(rq, k) < 0) break;
+            int r = diag_recv(rq, 4, rsp, sizeof(rsp), 3);
+            if (r < 16) break;
+            int32_t derr; memcpy(&derr, rsp + 12, 4);
+            int start = -1;
+            for (int i = 16; i < r; i++) {
+                if (rsp[i] >= 32 && rsp[i] < 127) { start = i; break; }
+            }
+            if (start < 0) { printf("  (end at seq %d, errno=%d)\n", seq, derr); break; }
+            printf("  %s\n", (char *)(rsp + start));
+            rc = 0;
+        }
+        uint8_t cq[16];
+        n = efs_hdr(cq, EFS2_CLOSEDIR);
+        memcpy(cq + n, &dirp, 4); n += 4;
+        diag_send(cq, n);
+        diag_recv(cq, 4, rsp, sizeof(rsp), 2);
+    } else if (!strcmp(argv[1], "write") && argc > 3) {
+        /* oflag/mode are EFS2's own, not the host's. Overridable so the values can be probed
+         * without a rebuild; the defaults are write+create+truncate and 0644. */
+        int32_t oflag = argc > 4 ? (int32_t)strtol(argv[4], NULL, 0) : 0x0301;
+        int32_t fmode = argc > 5 ? (int32_t)strtol(argv[5], NULL, 0) : 0644;
+        size_t dn = strlen(argv[3]) / 2;
+        uint8_t data[1024];
+        if (dn > sizeof(data)) { fprintf(stderr, "too much data\n"); goto out; }
+        for (size_t i = 0; i < dn; i++) sscanf(argv[3] + 2 * i, "%2hhx", &data[i]);
+
+        do_hello(rsp, sizeof(rsp));
+        uint8_t req[512];
+        int n = efs_hdr(req, EFS2_OPEN);
+        memcpy(req + n, &oflag, 4); n += 4;
+        memcpy(req + n, &fmode, 4); n += 4;
+        size_t pl = strlen(argv[2]) + 1;
+        memcpy(req + n, argv[2], pl); n += pl;
+        if (diag_send(req, n) < 0) goto out;
+        int m = diag_recv(req, 4, rsp, sizeof(rsp), 4);
+        if (m < 12) { fprintf(stderr, "open: no reply\n"); goto out; }
+        int32_t fd, eno;
+        memcpy(&fd, rsp + 4, 4); memcpy(&eno, rsp + 8, 4);
+        printf("open(oflag=0x%x mode=0%o) fd=%d errno=%d\n", oflag, fmode, fd, eno);
+        if (eno != 0) { rc = 1; goto out; }
+
+        uint8_t wreq[1200];
+        n = efs_hdr(wreq, EFS2_WRITE);
+        uint32_t off = 0;
+        memcpy(wreq + n, &fd, 4); n += 4;
+        memcpy(wreq + n, &off, 4); n += 4;
+        memcpy(wreq + n, data, dn); n += dn;
+        if (diag_send(wreq, n) < 0) goto out;
+        m = diag_recv(wreq, 4, rsp, sizeof(rsp), 4);
+        if (m < 16) { fprintf(stderr, "write: no reply\n"); goto out; }
+        printf("write raw reply: "); hexdump(rsp, m);
+        uint32_t wrote; int32_t werr;
+        memcpy(&wrote, rsp + 12, 4);
+        memcpy(&werr, rsp + 16, 4);
+        printf("wrote=%u errno=%d\n", wrote, werr);
+        if (werr == 0 && wrote == dn) rc = 0;
+
+        uint8_t creq[16];
+        n = efs_hdr(creq, EFS2_CLOSE);
+        memcpy(creq + n, &fd, 4); n += 4;
+        diag_send(creq, n);
+        diag_recv(creq, 4, rsp, sizeof(rsp), 2);
+    } else if (!strcmp(argv[1], "rm") && argc > 2) {
+        do_hello(rsp, sizeof(rsp));
+        uint8_t req[512];
+        int n = efs_hdr(req, EFS2_UNLINK);
+        size_t pl = strlen(argv[2]) + 1;
+        memcpy(req + n, argv[2], pl); n += pl;
+        if (diag_send(req, n) < 0) goto out;
+        int m = diag_recv(req, 4, rsp, sizeof(rsp), 4);
+        if (m < 8) { fprintf(stderr, "unlink: no reply\n"); goto out; }
+        int32_t eno; memcpy(&eno, rsp + 4, 4);
+        printf("unlink errno=%d\n", eno);
+        rc = eno == 0 ? 0 : 1;
     } else {
         fprintf(stderr, "unknown subcommand\n"); rc = 2;
     }
