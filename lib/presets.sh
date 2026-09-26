@@ -130,6 +130,38 @@ forge_preset_tag() {
   printf '%s' "$tag"
 }
 
+# The prefix every preset tag on this device shares -- `turbo` where the rows read turbo,
+# turbo-clean, turbo-libre. That prefix is the device's identity rather than any one preset's, so an
+# ad-hoc build should keep it. Taken from the first row and then CHECKED against the rest, so a device
+# whose tags have nothing in common gets no prefix instead of a wrong one. The synthetic stock preset
+# is excluded: its tag is `stock` by definition and would defeat the check on every device.
+_forge_preset_tag_prefix() {
+  local n t cand="" all
+  all="$(forge_preset_names)"
+  for n in $all; do
+    _forge_stock_is_synthetic "$n" && continue
+    t="$(forge_preset_field "$n" tag 2>/dev/null)" || continue
+    [ -n "$t" ] || continue
+    [ -n "$cand" ] || { cand="${t%%-*}"; continue; }
+    case "$t" in "$cand"*) ;; *) printf ''; return 0 ;; esac
+  done
+  printf '%s' "$cand"
+}
+
+# The tag for a build described by OPTIONS rather than by a preset. Derived for the same reason preset
+# tags are: so the filename cannot disagree with the contents. Options are sorted, so the same set
+# always produces the same name.
+forge_adhoc_tag() {
+  local opts pre
+  opts="$(printf '%s' "${1:-}" | tr ', ' '\n\n' | sed '/^$/d' | sort -u | tr '\n' '-')"
+  opts="${opts%-}"
+  pre="$(_forge_preset_tag_prefix)"
+  if [ -n "$pre" ] && [ -n "$opts" ]; then printf '%s-%s' "$pre" "$opts"
+  elif [ -n "$opts" ]; then printf '%s' "$opts"
+  else printf '%s' "${pre:-adhoc}"
+  fi
+}
+
 # The options for a build: COMMON_OPTIONS (everything this device always wants) plus the preset's
 # own. Without the common set every preset row repeats the same dozen names, which is unreadable and
 # is how one row quietly ends up missing something the others have.

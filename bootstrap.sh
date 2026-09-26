@@ -97,6 +97,12 @@ if [ -n "${PRESET:-}" ]; then
   # The tag is derived HERE, where EXTRA_OPTIONS (and device.conf.local) are visible. The container
   # never sees them, so deriving it there silently dropped the -oem suffix from the filename.
   TURBO_BUILD_ID="${TURBO_BUILD_ID:-$(forge_preset_tag "$PRESET")}"
+else
+  # An ad-hoc OPTIONS= set has no preset tag, and before this it fell through to whatever the device
+  # defaults to -- so OPTIONS="oem" produced an image called turbo-ether.zip: indistinguishable from
+  # the full preset and silent about carrying reclaimed OEM assets. Derive it from the options, for the
+  # same reason the preset tags are derived here rather than in the container.
+  TURBO_BUILD_ID="${TURBO_BUILD_ID:-$(forge_adhoc_tag "$OPTIONS")}"
 fi
 BUILD_OPTIONS="${OPTIONS:-$(forge_preset_options "${PRESET:-}")}"
 BUILD_OPTIONS="${BUILD_OPTIONS//,/ }"
