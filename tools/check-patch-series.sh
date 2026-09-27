@@ -24,8 +24,8 @@
 # COLLAPSING A PAIR, AND THE ONLY VERIFICATION WORTH TRUSTING
 #
 # Record the project's tree object, reset to the vendored base, replay the series with the fold
-# applied, and compare. It must be IDENTICAL. A fold that looked obvious has more than once turned
-# out to change behaviour, and the tree hash is the thing that caught it:
+# applied, and compare. It must be IDENTICAL -- a fold that looks obvious can still change
+# behaviour, and this is the only check that catches it:
 #
 #   git -C <project> rev-parse HEAD^{tree}      # before
 #   git -C <project> reset --hard <base>
@@ -44,8 +44,7 @@
 #   - Editing a line a patch ADDS turns it into context for every later patch that quotes it, which
 #     then fails to apply. Grep the whole series for the line before changing it.
 #   - A change that deliberately alters the tree cannot use the hash check. Verify the invariant
-#     instead -- the set of list entries, the expanded variable -- and say in the commit message that
-#     the result is argued rather than proven, and that a build is still owed.
+#     instead (the set of list entries, the expanded variable) and build before trusting it.
 set -uo pipefail
 
 ARG=""; QUIET=0
@@ -73,12 +72,9 @@ for root, dirs, files in os.walk(pdir):
     if len(pats) < 2:
         continue
     project = os.path.relpath(root, pdir)
-    # Keyed by (file, body), not body alone. Two patches touching DIFFERENT files that happen to
-    # contain the same line are not a pair, and treating them as one is not a harmless over-report:
-    # ether had cgroups.json and cgroups.recovery.json both carrying '"Mode": "0755",', which read as
-    # a patch undoing another for as long as anyone believed the tool. Structured formats make this
-    # likely -- the body is stripped, so indentation does not save you, and short JSON/XML lines
-    # recur constantly.
+    # Keyed by (file, body), not body alone: two patches touching DIFFERENT files that happen to share
+    # a line are not a pair. Bodies are stripped, so indentation does not distinguish them, and short
+    # JSON/XML lines recur across sibling config files constantly.
     added = {}      # (file, body) -> first patch that added it
     undo = {}       # (later, earlier) -> [(file, body)]
     for p in pats:
