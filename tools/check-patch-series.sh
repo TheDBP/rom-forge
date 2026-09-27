@@ -73,24 +73,37 @@ for root, dirs, files in os.walk(pdir):
     if len(pats) < 2:
         continue
     project = os.path.relpath(root, pdir)
-    added = {}      # body -> first patch that added it
-    undo = {}       # (later, earlier) -> [bodies]
+    # Keyed by (file, body), not body alone. Two patches touching DIFFERENT files that happen to
+    # contain the same line are not a pair, and treating them as one is not a harmless over-report:
+    # ether had cgroups.json and cgroups.recovery.json both carrying '"Mode": "0755",', which read as
+    # a patch undoing another for as long as anyone believed the tool. Structured formats make this
+    # likely -- the body is stripped, so indentation does not save you, and short JSON/XML lines
+    # recur constantly.
+    added = {}      # (file, body) -> first patch that added it
+    undo = {}       # (later, earlier) -> [(file, body)]
     for p in pats:
         num = p[:4]
+        cur = None
         with open(os.path.join(root, p), encoding='utf-8', errors='replace') as fh:
             for raw in fh:
-                if raw.startswith(('+++', '---', '@@')):
+                if raw.startswith('+++ '):
+                    cur = raw[4:].strip()
+                    if cur.startswith('b/'):
+                        cur = cur[2:]
+                    continue
+                if raw.startswith(('---', '@@', 'diff --git')):
                     continue
                 body = raw[1:].strip()
                 # short lines are punctuation and noise: braces, blank lines, "endif"
                 if len(body) < 12:
                     continue
+                key = (cur, body)
                 if raw.startswith('+'):
-                    added.setdefault(body, num)
+                    added.setdefault(key, num)
                 elif raw.startswith('-'):
-                    first = added.get(body)
+                    first = added.get(key)
                     if first is not None and first != num:
-                        undo.setdefault((num, first), []).append(body)
+                        undo.setdefault((num, first), []).append(key)
     if undo:
         report.append((project, undo))
         total_pairs += len(undo)
@@ -104,8 +117,10 @@ print(">> patch series: %d patch pair(s) where a later patch undoes an earlier o
 for project, undo in report:
     print("   %s" % project)
     for (later, earlier), bodies in sorted(undo.items()):
-        print("     %s undoes %s  (%d line(s))" % (later, earlier, len(bodies)))
-        for b in bodies[:2]:
+        files = sorted({f for f, _b in bodies if f})
+        where = files[0] if len(files) == 1 else '%d files' % len(files)
+        print("     %s undoes %s  (%d line(s) in %s)" % (later, earlier, len(bodies), where))
+        for f, b in bodies[:2]:
             print("         %s" % (b[:96] + ('…' if len(b) > 96 else '')))
 print()
 print("   A series is replayed from scratch, so this is one change written twice. Collapse the pair")
