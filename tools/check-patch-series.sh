@@ -20,13 +20,39 @@
 # whitespace-only lines are skipped, since braces and blank lines move around constantly and mean
 # nothing. The result is advisory -- collapsing a series is a rebase, not something to do
 # automatically -- but it should be seen every time the patches are regenerated.
+#
+# COLLAPSING A PAIR, AND THE ONLY VERIFICATION WORTH TRUSTING
+#
+# Record the project's tree object, reset to the vendored base, replay the series with the fold
+# applied, and compare. It must be IDENTICAL. A fold that looked obvious has more than once turned
+# out to change behaviour, and the tree hash is the thing that caught it:
+#
+#   git -C <project> rev-parse HEAD^{tree}      # before
+#   git -C <project> reset --hard <base>
+#   git am <series, with the fold applied>
+#   git -C <project> rev-parse HEAD^{tree}      # must match
+#
+# Then refresh-patches.sh --force -- it refuses to drop patches without it -- and re-run this check.
+#
+# Traps. Each produces a silently wrong patch rather than an error:
+#
+#   - Patches exported --no-signature have no "-- " trailer, so the file's final newline lives inside
+#     the last diff section. Strip that section and the patch ends without a newline, which git apply
+#     reports as "corrupt patch at line N".
+#   - Strip whole per-file sections, never individual hunks, or the @@ counts need recomputing.
+#   - Retargeting a hunk's context is safe only while the context LINE COUNT stays the same.
+#   - Editing a line a patch ADDS turns it into context for every later patch that quotes it, which
+#     then fails to apply. Grep the whole series for the line before changing it.
+#   - A change that deliberately alters the tree cannot use the hash check. Verify the invariant
+#     instead -- the set of list entries, the expanded variable -- and say in the commit message that
+#     the result is argued rather than proven, and that a build is still owed.
 set -uo pipefail
 
 ARG=""; QUIET=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --quiet) QUIET=1; shift ;;
-    -h|--help) sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,48p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) ARG="$1"; shift ;;
   esac
 done
