@@ -167,9 +167,12 @@ apply_option_prepatch() {
     # F-Droid went missing from ether 20.0: its fetch.sh copies into device/<vendor>/<codename>/fdroid
     # only "if [ -n "$DEVICE" ]", which was never true. Firefox survived by accident -- bootstrap has
     # a separate step that places it -- which is exactly why the bug stayed invisible.
+    # BUILD_OPTIONS is passed explicitly for the same reason DEVICE is: a fetcher that guards on it
+    # must not depend on inheritance. nextcloud-core's fetch refuses to run when nextcloud is also on,
+    # and that guard is worthless if the variable can arrive empty.
     ( cd "$AOSP" && FORGE_DIR="$FORGE" OPTION_DIR="$odir" \
         DEVICE="${DEVICE:-}" VENDOR="${VENDOR:-}" DEVICE_SLUG="${DEVICE_SLUG:-}" \
-        FDROID_PINS="${FDROID_PINS:-}" \
+        FDROID_PINS="${FDROID_PINS:-}" BUILD_OPTIONS="${BUILD_OPTIONS:-}" \
         bash "$odir/fetch.sh" "$AOSP" ) \
       || { echo "   !! fetch failed for option $oname"; return 1; }
   fi
@@ -343,10 +346,14 @@ fi
 # WITH_LINUX_CGROUP_PATCH=false) never assigns KERNEL_EXTRA_PATCHES at all.
 KERNEL_EXTRA_CONFIGS="${KERNEL_EXTRA_CONFIGS:-}"
 KERNEL_EXTRA_PATCHES="${KERNEL_EXTRA_PATCHES:-}"
+# Patches an option declares OPTIONAL: skipped with a warning when they do not apply, rather than
+# failing the build. Only for instrumentation that ships no product config -- a functional patch that
+# silently does not apply is how a ROM goes out broken.
+KERNEL_EXTRA_PATCHES_OPTIONAL="${KERNEL_EXTRA_PATCHES_OPTIONAL:-}"
 for _o in ${BUILD_OPTIONS:-}; do
   _oc="$FORGE/options/$_o/option.conf"
   [ -f "$_oc" ] || continue
-  ( : ) ; KERNEL_CONFIGS=""; KERNEL_PATCHES=""
+  ( : ) ; KERNEL_CONFIGS=""; KERNEL_PATCHES=""; KERNEL_PATCHES_OPTIONAL=""
   # shellcheck disable=SC1090
   source "$_oc"
   for _c in ${KERNEL_CONFIGS:-}; do
@@ -356,6 +363,9 @@ for _o in ${BUILD_OPTIONS:-}; do
   for _p in ${KERNEL_PATCHES:-}; do
     [ "$_p" = cgroup-noprefix-symlinks ] && [ "${WITH_LINUX_CGROUP_PATCH:-true}" != true ] && continue
     case " ${KERNEL_EXTRA_PATCHES:-} " in *" $_p "*) ;; *) KERNEL_EXTRA_PATCHES="${KERNEL_EXTRA_PATCHES:-} $_p" ;; esac
+  done
+  for _p in ${KERNEL_PATCHES_OPTIONAL:-}; do
+    case " ${KERNEL_EXTRA_PATCHES_OPTIONAL:-} " in *" $_p "*) ;; *) KERNEL_EXTRA_PATCHES_OPTIONAL="${KERNEL_EXTRA_PATCHES_OPTIONAL:-} $_p" ;; esac
   done
 done
 # container-fhandle rides with `linux` but is its own fragment, so a device can drop just that one.
@@ -460,9 +470,19 @@ for _kp in ${KERNEL_EXTRA_PATCHES:-}; do
   elif ( cd "$AOSP/$_ksrc" && git apply "$_p" 2>/dev/null ); then
     echo ">> kernel patch '$_kp' -> $_ksrc"
   else
-    echo "!! kernel patch '$_kp' does NOT apply to $_ksrc -- refusing to continue"
-    echo "   (kernels differ; see forge/kernel-patches/$_kp.patch for which versions it targets)"
-    exit 1
+    case " ${KERNEL_EXTRA_PATCHES_OPTIONAL:-} " in
+      *" $_kp "*)
+        echo "!! kernel patch '$_kp' does NOT apply to $_ksrc -- SKIPPED (declared optional)"
+        echo "   Whatever it instruments is absent from this build, which is the option's whole"
+        echo "   purpose, so treat the option as off. See forge/kernel-patches/$_kp.patch for the"
+        echo "   kernels it targets."
+        ;;
+      *)
+        echo "!! kernel patch '$_kp' does NOT apply to $_ksrc -- refusing to continue"
+        echo "   (kernels differ; see forge/kernel-patches/$_kp.patch for which versions it targets)"
+        exit 1
+        ;;
+    esac
   fi
 done
 
