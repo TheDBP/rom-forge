@@ -229,7 +229,7 @@ if [ -f "$WPAPK" ]; then
     [ -e "$f" ] || continue
     base="$(basename "$f")"; case "$base" in *_small.png) continue;; esac
     stem="robin_${base%.png}"
-    cp -f "$f" "$OEM/wallpaper/$stem.png"          # (a) raw file (patch 0016 -> /product/media/wallpaper)
+    cp -f "$f" "$OEM/wallpaper/$stem.png"          # (a) raw file (the wallpaper patch -> /product/media/wallpaper)
     # (b) Backgrounds picker: full JPG + 1/4 _small thumbnail
     if [ -n "$CONVERT" ]; then
       convert "$f" "$BG/drawable-nodpi/$stem.jpg"
