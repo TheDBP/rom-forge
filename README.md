@@ -34,7 +34,8 @@ These are real device repos built with this engine. Copy one rather than startin
 
 | Repo | Device | Branch | State |
 |---|---|---|---|
-| [ether-lineage](https://github.com/TheDBP/ether-lineage) | Nextbit Robin | 20.0 released, 21 in progress | Daily driver. Upstream stopped at 18.1, so everything above that is a 50-patch series in the repo. |
+| [ether-lineage-20.0-volte](https://github.com/TheDBP/ether-lineage-20.0-volte) | Nextbit Robin | 20.0, VoLTE working | Daily driver. Upstream stopped at 18.1, so everything above that is a 75-patch series in the repo. |
+| [ether-lineage-21.0-volte](https://github.com/TheDBP/ether-lineage-21.0-volte) | Nextbit Robin | 21.0, staged | Starts from the 20.0 series. 21 is the end of the line: 22 needs a 4.19 kernel and this one is 3.10. |
 | [bonito-lineage](https://github.com/TheDBP/bonito-lineage) | Pixel 3a XL | 22.2 released, 24.0 skeleton | Working; thin layer over supported upstream. 24.0 is gated on an eBPF backport to its 4.9 kernel. |
 | [vs995-lineage](https://github.com/TheDBP/vs995-lineage) | LG V20 (Verizon) | 22.2 released | Builds, flashes and boots. Ends at 15: 4.4 kernel. |
 
