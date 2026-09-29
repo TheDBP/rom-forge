@@ -100,7 +100,10 @@ else
   # hand from some other build; the audit below inspects the tree, and the tree is not that zip.
   # The tag is bounded on both sides: an EXTRA_OPTIONS build appends "-<option>" to it, so
   # turbo-libre-nextcloud must not answer for turbo-libre.
-  ZIP="$(ls -t "$OUTDIR"/*-"$VT"-"$DEVICE_CODENAME".zip 2>/dev/null | head -1 || true)"
+  # Same tie-break as bootstrap's keep step: equal mtimes mean one inode under two names, and
+  # picking by locale order can select the wrong date. Highest name wins the tie.
+  ZIP="$(find "$OUTDIR" -maxdepth 1 -name "*-$VT-$DEVICE_CODENAME.zip" -printf '%T@\t%p\n' 2>/dev/null \
+         | sort -k1,1nr -k2,2r | head -1 | cut -f2)"
 fi
 [ -n "$ZIP" ] && [ -f "$ZIP" ] || die "no built zip for preset '$VN' (expected $OUTDIR/*-${VT}-${DEVICE_CODENAME}.zip) -- build it first: PRESET=$VN ./forge/bootstrap.sh"
 info "artifact: $(basename "$ZIP") ($(du -h "$ZIP" | cut -f1))"
