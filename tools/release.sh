@@ -288,6 +288,14 @@ fi
 # for it explicitly. Set KERNEL_SOURCE_URL in device.conf once publish-kernel-source.sh has pushed a
 # tree; unset, the notes simply omit the line. Built with an explicit if for the reason above: a
 # ${VAR:-default} here would publish the variable's value.
+# A device whose headline feature needs saying says it here, above the boilerplate. Set
+# RELEASE_HEADLINE in device.conf. Explicit if, not ${VAR:-default}, for the reason given above.
+if [ -n "${RELEASE_HEADLINE:-}" ]; then
+  HEADLINE_NOTE="$RELEASE_HEADLINE
+"
+else
+  HEADLINE_NOTE=""
+fi
 if [ -n "${KERNEL_SOURCE_URL:-}" ]; then
   KERNEL_SOURCE_NOTE="
 **Kernel source** (GPL-2.0), upstream history with this device's patches on top: $KERNEL_SOURCE_URL
@@ -298,7 +306,7 @@ fi
 # The body is one shared head plus one section per preset, so a second preset published the same
 # day (same tag, same commit) appends its section instead of needing a release of its own.
 cat > "$NOTES" <<EOF
-Unofficial LineageOS build for \`$DEVICE_CODENAME\`, branch \`$BRANCH\`. One zip per preset below.
+${HEADLINE_NOTE}Unofficial LineageOS build for \`$DEVICE_CODENAME\`, branch \`$BRANCH\`. One zip per preset below.
 
 **What is not in it:** no Google apps, and none of the manufacturer's own boot animation, wallpapers
 or system sounds. Those are theirs, not mine, so they are not mine to hand out. If you want them on
