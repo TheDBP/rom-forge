@@ -45,6 +45,10 @@
 #     then fails to apply. Grep the whole series for the line before changing it.
 #   - A change that deliberately alters the tree cannot use the hash check. Verify the invariant
 #     instead (the set of list entries, the expanded variable) and build before trusting it.
+#   - Reordering is not free either. Two patches that both APPEND to one file -- a module block, a
+#     list entry, an rc service -- encode their order in that file's content, so swapping them
+#     changes the file and therefore the tree. Applying cleanly is not the test; the hash is. Such a
+#     pair cannot be reordered without accepting a content change, so leave them in order.
 set -uo pipefail
 
 ARG=""; QUIET=0
