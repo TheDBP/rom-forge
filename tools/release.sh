@@ -284,6 +284,17 @@ else
   RECOVERY_NOTE="The zip carries its own boot image, recovery included."
   RECOVERY_STEP=""
 fi
+# GPL-2.0 asks for the corresponding source of the kernel in the image, and an XDA thread will be asked
+# for it explicitly. Set KERNEL_SOURCE_URL in device.conf once publish-kernel-source.sh has pushed a
+# tree; unset, the notes simply omit the line. Built with an explicit if for the reason above: a
+# ${VAR:-default} here would publish the variable's value.
+if [ -n "${KERNEL_SOURCE_URL:-}" ]; then
+  KERNEL_SOURCE_NOTE="
+**Kernel source** (GPL-2.0), upstream history with this device's patches on top: $KERNEL_SOURCE_URL
+"
+else
+  KERNEL_SOURCE_NOTE=""
+fi
 # The body is one shared head plus one section per preset, so a second preset published the same
 # day (same tag, same commit) appends its section instead of needing a release of its own.
 cat > "$NOTES" <<EOF
@@ -295,7 +306,7 @@ your phone, the build system can put them back from a copy of your phone's own s
 see \`forge/docs/OEM-ASSETS.md\`.
 
 Like every Android ROM, this contains proprietary vendor firmware for the hardware to work at all.
-
+${KERNEL_SOURCE_NOTE}
 **Installing:** ${RECOVERY_STEP}boot into recovery, *Factory reset*, then *Apply update → ADB
 sideload* the zip, reboot. Updating from an earlier one of these builds: sideload the new zip, no
 wipe. $RECOVERY_NOTE
