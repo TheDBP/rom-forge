@@ -52,6 +52,45 @@ rules — Android 17 reads `/system/etc/ueventd.rc` only, and the vendor file ha
 `/vendor/etc/ueventd.rc` for its `import` (system/core `1b926a344` dropped the legacy
 `/vendor/ueventd.rc` path that pre-T `first_api_level` devices were still using).
 
+## When the console itself is the problem
+
+A hang (OEM logo, no USB, no reboot) leaves nothing: a forced power-off empties ramoops, and a
+loop that the bootloader turns into a cold reset does the same. `tools/boot-console-wrap.sh build`
+makes a boot image from the real one plus the recovery ramdisk, whose PID 1 copies the previous
+boot's console-ramoops into an unused region of `misc`, forks a watchdog, then execs the real
+init. The watchdog waits out the timeout, writes `dmesg` to the same place, arms a `boot-recovery`
+BCB and reboots. One pass of the loop or the hang, then recovery, then
+`boot-console-wrap.sh pull`. Needs no partition changes and no working adb. The design notes
+in the script header are the list of ways init kills a bystander process (`SwitchRoot`,
+`FreeRamdisk`, a visible `/system/bin/recovery`); read them before changing it.
+
+## Looking ahead
+
+Most of what stops a new branch on an old kernel is decidable before the flash. In order:
+
+1. **Static, on the out tree.** `check-dt-needed.py` (link failures), `rc-fatal-services.py`
+   (which failures become loops), `check-bpf-objects.py` (what the kernel cannot load), and
+   `check_vintf` from the build. Minutes, and runnable on the previous build's `out/` while the
+   next one is still going.
+2. **Dynamic, from recovery, on the same kernel.** Recovery runs the kernel the system will boot,
+   so every kernel-capability question can be put to it directly, before `system` is touched:
+   `cat /sys/kernel/tracing/available_events` (feed it to `check-bpf-objects.py
+   --available-events`), `/proc/cgroups`, `/proc/filesystems`, a feature probe. And the flashed
+   system can be mounted and chrooted into: bind `/dev`, mount `proc`/`sys`, tmpfs on `/apex`,
+   `/linkerconfig` and `/data` (that one with `-o context=u:object_r:apex_data_file:s0`, or
+   apexd refuses to decompress the `.capex` files into it), then
+   `chroot <root> /system/bin/apexd --otachroot-bootstrap` activates the apexes without init, and
+   `chroot <root> /apex/com.android.runtime/bin/linkerconfig --target /linkerconfig` gives the
+   real linker namespaces. After that `chroot <root> /system/bin/<daemon> --help` exercises each
+   fatal service's startup through the real linker on the real kernel. apexd logs to kmsg
+   (recovery has no logd): `dmesg | grep apexd-otachroot`. A daemon that exits 1 with
+   `CANNOT LINK EXECUTABLE` here would have looped the device.
+3. **Boot time, as the fallback.** The watchdog image above for whatever slipped past.
+
+Then read the consumers. A missing tracepoint or map is only fatal if something aborts on it:
+`BpfMapRO`'s constructor does (`abortOnMismatch`), lmkd's `registerEvent` does not, AMS catches
+the JNI `RuntimeException`. Five minutes in the consumer's source settles what a flash would.
+
 ## Why pstore misleads
 
 pstore survives a reboot but not a cold power-off, and the pmsg ring is 256K–512K
