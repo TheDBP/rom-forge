@@ -27,7 +27,7 @@ tools:
   - name: "boot-console-wrap.sh"
     path: "tools/boot-console-wrap.sh"
     summary: "a boot image that gets the kernel console out of a boot loop or a hang, on a device whose bootloader gives you no serial, no ramoops across its resets, and no `fastboot boot`"
-    usage: "boot-console-wrap.sh build <boot.img> <recovery.img> <out.img> [--timeout 150] [--misc-offset-mib 16]"
+    usage: "boot-console-wrap.sh build <boot.img> <recovery.img> <out.img> [--timeout 150] [--every 10] [--misc-offset-mib 16]"
     docs:
       - "docs/debugging-a-boot-loop.md"
   - name: "boot-window-logcat.sh"

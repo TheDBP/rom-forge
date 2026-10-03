@@ -2,7 +2,7 @@
 # boot-console-wrap.sh — a boot image that gets the kernel console out of a boot loop or a hang,
 # on a device whose bootloader gives you no serial, no ramoops across its resets, and no `fastboot boot`.
 #
-#   boot-console-wrap.sh build <boot.img> <recovery.img> <out.img> [--timeout 150] [--misc-offset-mib 16]
+#   boot-console-wrap.sh build <boot.img> <recovery.img> <out.img> [--timeout 150] [--every 10] [--misc-offset-mib 16]
 #                              [--permissive] [--cmdline-add '...']
 #   boot-console-wrap.sh pull  <out.txt> [--misc-offset-mib 16] [-s SERIAL]
 #
@@ -13,10 +13,13 @@
 #   1. mounts pstore and copies the previous iteration's console-ramoops into the misc partition at
 #      --misc-offset-mib (32 MiB misc: bootloader and recovery use the first few KiB, recovery
 #      zeroes the BCB on start, nothing touches 16 MiB);
-#   2. forks a watchdog that, after --timeout seconds, writes `dmesg` 1 MiB after that, arms a
-#      boot-recovery BCB and reboots with sysrq. This is what reads a HANG: a forced power-off
-#      leaves nothing in ramoops, and a warm reboot the bootloader turns into a cold one does not
-#      either. The loop therefore runs at most once more and lands in recovery;
+#   2. forks a watchdog that writes `dmesg` 1 MiB after that every --every seconds and, after
+#      --timeout seconds, arms a boot-recovery BCB and reboots with sysrq. This is what reads a
+#      HANG: a forced power-off leaves nothing in ramoops, and a warm reboot the bootloader turns
+#      into a cold one does not either. The loop therefore runs at most once more and lands in
+#      recovery. The rolling snapshot is what reads an init that reboots to recovery on its own
+#      before the timeout (`reboot,<target>` with a recovery target): the last snapshot before
+#      the reboot is what pull shows, at most --every seconds short of the reason;
 #   3. exec's /init.boot.
 # pull: from that recovery, dumps the misc region as text.
 #
@@ -36,10 +39,11 @@ set -euo pipefail
 usage() { sed -n '2,/^set -e/p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-1}"; }
 [ $# -ge 1 ] || usage
 MODE="$1"; shift
-TIMEOUT=150; OFF=16; PERM=0; CADD=""; SER=""; POS=()
+TIMEOUT=150; EVERY=10; OFF=16; PERM=0; CADD=""; SER=""; POS=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --timeout) TIMEOUT="$2"; shift 2 ;;
+    --every) EVERY="$2"; shift 2 ;;
     --misc-offset-mib) OFF="$2"; shift 2 ;;
     --permissive) PERM=1; shift ;;
     --cmdline-add) CADD="$2"; shift 2 ;;
@@ -103,7 +107,7 @@ T=/system/bin/toybox
 \$T mkdir -p /dev /proc /sys /pstore
 \$T mknod -m 600 /dev/kmsg c 1 11 2>/dev/null; \$T mknod -m 666 /dev/null c 1 3 2>/dev/null; \$T mknod -m 600 /dev/console c 5 1 2>/dev/null
 exec 0</dev/null 1>/dev/kmsg 2>/dev/kmsg
-echo "wrap: rdinit start (timeout ${TIMEOUT}s, misc@${OFF}MiB)"
+echo "wrap: rdinit start (timeout ${TIMEOUT}s, dmesg every ${EVERY}s, misc@${OFF}MiB)"
 \$T mount -t proc proc /proc; \$T mount -t sysfs sysfs /sys
 \$T mount -t pstore pstore /pstore 2>/dev/null || echo "wrap: no pstore"
 # the misc partition, by PARTNAME: its major:minor differs per storage type, so ask sysfs (and
@@ -137,13 +141,18 @@ echo "watchdog: ns ready, chrooting"; \$T touch /diag-ready
 exec \$T chroot /diag /system/bin/sh -c "
 exec 0</dev/null 1>/dev/kmsg 2>/dev/kmsg
 T=/system/bin/toybox
-echo \\"watchdog: armed, snapshot in ${TIMEOUT}s\\"
-\\\$T sleep $TIMEOUT
-echo \\"watchdog: snapshotting dmesg\\"
-{ echo \\"DIAGLOG v1 uptime=\\\$(\\\$T cat /proc/uptime)\\"; \\\$T dmesg; echo \\"===== DIAGLOG END =====\\"; } > /log.txt 2>&1
+echo \\"watchdog: armed, dmesg every ${EVERY}s, reboot at ${TIMEOUT}s\\"
+t=0; n=0
+while [ \\\$t -lt $TIMEOUT ]; do
+  \\\$T sleep $EVERY; t=\\\$((t + $EVERY)); n=\\\$((n + 1))
+  { echo \\"DIAGLOG v1 snapshot=\\\$n uptime=\\\$(\\\$T cat /proc/uptime)\\"; \\\$T dmesg; echo \\"===== DIAGLOG END =====\\"; } > /log.txt 2>&1
+  if [ -e /dev/misc ]; then
+    \\\$T dd if=/dev/zero of=/dev/misc bs=4096 seek=$((SEEK + 256)) count=256 conv=notrunc 2>/dev/null
+    \\\$T dd if=/log.txt of=/dev/misc bs=4096 seek=$((SEEK + 256)) conv=notrunc 2>/dev/null; \\\$T sync
+  fi
+done
+echo \\"watchdog: timeout, last snapshot \\\$n\\"
 if [ -e /dev/misc ]; then
-  \\\$T dd if=/dev/zero of=/dev/misc bs=4096 seek=$((SEEK + 256)) count=256 conv=notrunc 2>/dev/null
-  \\\$T dd if=/log.txt of=/dev/misc bs=4096 seek=$((SEEK + 256)) conv=notrunc; \\\$T sync
   # bootloader_message: command[32] at 0 = boot-recovery, recovery[768] at 64 = recovery\\\\n
   \\\$T dd if=/dev/zero of=/dev/misc bs=2048 count=1 conv=notrunc
   \\\$T printf boot-recovery | \\\$T dd of=/dev/misc conv=notrunc

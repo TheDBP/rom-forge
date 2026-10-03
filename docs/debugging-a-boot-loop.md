@@ -58,9 +58,11 @@ A hang (OEM logo, no USB, no reboot) leaves nothing: a forced power-off empties 
 loop that the bootloader turns into a cold reset does the same. `tools/boot-console-wrap.sh build`
 makes a boot image from the real one plus the recovery ramdisk, whose PID 1 copies the previous
 boot's console-ramoops into an unused region of `misc`, forks a watchdog, then execs the real
-init. The watchdog waits out the timeout, writes `dmesg` to the same place, arms a `boot-recovery`
-BCB and reboots. One pass of the loop or the hang, then recovery, then
-`boot-console-wrap.sh pull`. Needs no partition changes and no working adb. The design notes
+init. The watchdog writes `dmesg` to the same place every few seconds and, at the timeout, arms a
+`boot-recovery` BCB and reboots. One pass of the loop or the hang, then recovery, then
+`boot-console-wrap.sh pull`. The rolling snapshot also covers an init that reboots to recovery
+by itself (`reboot,<target>` with a recovery target) before the timeout: what pull shows is the
+last snapshot before that reboot. Needs no partition changes and no working adb. The design notes
 in the script header are the list of ways init kills a bystander process (`SwitchRoot`,
 `FreeRamdisk`, a visible `/system/bin/recovery`); read them before changing it.
 
