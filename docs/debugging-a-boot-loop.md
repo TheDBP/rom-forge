@@ -62,7 +62,11 @@ init. The watchdog writes `dmesg` to the same place every few seconds and, at th
 `boot-recovery` BCB and reboots. One pass of the loop or the hang, then recovery, then
 `boot-console-wrap.sh pull`. The rolling snapshot also covers an init that reboots to recovery
 by itself (`reboot,<target>` with a recovery target) before the timeout: what pull shows is the
-last snapshot before that reboot. Needs no partition changes and no working adb. The design notes
+last snapshot before that reboot. It boots permissive: after init loads the policy the watchdog is
+in the `kernel` domain, which may write kmsg and sysrq but not a block device, so an enforcing
+watchdog reboots on time and saves nothing. Dry-run the generated `/wrap.sh` up to the first misc
+write in a chroot of the ramdisk from recovery (same kernel, `set -x`) before flashing: that is
+how a missing `/dev/zero` showed up, which a flash only shows as "nothing in misc". Needs no partition changes and no working adb. The design notes
 in the script header are the list of ways init kills a bystander process (`SwitchRoot`,
 `FreeRamdisk`, a visible `/system/bin/recovery`); read them before changing it.
 

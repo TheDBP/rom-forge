@@ -3,13 +3,13 @@
 # on a device whose bootloader gives you no serial, no ramoops across its resets, and no `fastboot boot`.
 #
 #   boot-console-wrap.sh build <boot.img> <recovery.img> <out.img> [--timeout 150] [--every 10] [--misc-offset-mib 16]
-#                              [--permissive] [--cmdline-add '...']
+#                              [--enforcing] [--cmdline-add '...']
 #   boot-console-wrap.sh pull  <out.txt> [--misc-offset-mib 16] [-s SERIAL]
 #
 # build: the real boot.img's kernel, header and cmdline, with a ramdisk made of the recovery
 # ramdisk (for toybox and a shell) plus the boot ramdisk overlaid on it, the real /init renamed
-# /init.boot, and `rdinit=/wrap.sh androidboot.init_fatal_reboot_target=recovery` appended. On every
-# boot /wrap.sh, as PID 1:
+# /init.boot, and `rdinit=/wrap.sh androidboot.init_fatal_reboot_target=recovery
+# androidboot.selinux=permissive` appended. On every boot /wrap.sh, as PID 1:
 #   1. mounts pstore and copies the previous iteration's console-ramoops into the misc partition at
 #      --misc-offset-mib (32 MiB misc: bootloader and recovery use the first few KiB, recovery
 #      zeroes the BCB on start, nothing touches 16 MiB);
@@ -21,7 +21,12 @@
 #      before the timeout (`reboot,<target>` with a recovery target): the last snapshot before
 #      the reboot is what pull shows, at most --every seconds short of the reason;
 #   3. exec's /init.boot.
-# pull: from that recovery, dumps the misc region as text.
+# Permissive by default because the watchdog stays in the `kernel` SELinux domain once init loads
+# the policy, and that domain may write kmsg and sysrq but not a block device (its misc node sits
+# on tmpfs: `dontaudit kernel tmpfs:blk_file`, so not even a denial shows). Enforcing, nothing
+# after step 1 reaches misc. Denials are still logged in permissive, so the console reads the same;
+# what --enforcing adds is a reboot *caused* by a denial, at the price of step 2.
+# pull: from that recovery, dumps the two misc slots as text, pstore slot first.
 #
 # Traps the watchdog has to dodge, each of which cost a flash:
 #   - `SwitchRoot` MS_MOVEs every mount it can see onto the new root and PLOG(FATAL)s when the
@@ -29,7 +34,9 @@
 #     (`unshare -m`) and hands off with a marker file before init starts.
 #   - `FreeRamdisk` deletes the rootfs after switch_root -- so the watchdog chroots into a tmpfs
 #     holding its own toybox, libs, /proc and device nodes.
-#   - PID 1 starts with fds 0-2 closed and no /dev or /proc: mknod first, then redirect to kmsg.
+#   - PID 1 starts with fds 0-2 closed and no /dev or /proc: mknod null, zero, kmsg first -- with
+#     no `2>/dev/null` on those lines, which would create a plain file by that name -- then redirect.
+#     The recovery ramdisk ships an empty /dev; `dd if=/dev/zero` on a missing node took one flash.
 #   - bionic finds a binary by name only through /proc/self/exe: call toybox by absolute path.
 #   - A visible `/system/bin/recovery` makes init boot recovery mode: it is removed at build time.
 # Header versions 0-2 only: on v3+ the cmdline and ramdisk live in vendor_boot.
@@ -39,12 +46,13 @@ set -euo pipefail
 usage() { sed -n '2,/^set -e/p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-1}"; }
 [ $# -ge 1 ] || usage
 MODE="$1"; shift
-TIMEOUT=150; EVERY=10; OFF=16; PERM=0; CADD=""; SER=""; POS=()
+TIMEOUT=150; EVERY=10; OFF=16; PERM=1; CADD=""; SER=""; POS=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --timeout) TIMEOUT="$2"; shift 2 ;;
     --every) EVERY="$2"; shift 2 ;;
     --misc-offset-mib) OFF="$2"; shift 2 ;;
+    --enforcing) PERM=0; shift ;;
     --permissive) PERM=1; shift ;;
     --cmdline-add) CADD="$2"; shift 2 ;;
     -s) SER="$2"; shift 2 ;;
@@ -62,9 +70,15 @@ if [ "$MODE" = pull ]; then
   # by-name is populated by recovery's ueventd; the sysfs scan is the fallback for a bare shell
   MISC="$("${ADB[@]}" shell 'm=$(readlink -f /dev/block/by-name/misc 2>/dev/null || readlink -f /dev/block/bootdevice/by-name/misc 2>/dev/null); [ -n "$m" ] && [ -b "$m" ] && echo "$m" && exit; for u in /sys/class/block/*/uevent; do grep -q "^PARTNAME=misc$" "$u" 2>/dev/null && echo /dev/block/$(basename $(dirname $u)) && exit; done' | tr -d '\r')"
   [ -n "$MISC" ] || { echo "!! cannot find the misc partition on the device" >&2; exit 1; }
-  "${ADB[@]}" exec-out "dd if=$MISC bs=4096 skip=$SEEK count=512 2>/dev/null" | tr -d '\000' > "$OUT"
+  # two 1 MiB slots, read separately so a stale slot cannot masquerade as the tail of the other
+  { for slot in 0 256; do
+      echo "######## misc @ $(( OFF * 1024 * 1024 + slot * 4096 )) ########"
+      "${ADB[@]}" exec-out "dd if=$MISC bs=4096 skip=$(( SEEK + slot )) count=256 2>/dev/null" | tr -d '\000'
+      echo
+    done; } > "$OUT"
   echo ">> $(wc -c < "$OUT") bytes from $MISC @ ${OFF} MiB -> $OUT"
-  grep -m1 -E '^(WRAPLOG|DIAGLOG)' "$OUT" || echo "!! no WRAPLOG/DIAGLOG header: nothing was saved there yet"
+  grep -E '^(WRAPLOG|DIAGLOG)' "$OUT" || echo "!! no WRAPLOG/DIAGLOG header: nothing was saved there yet"
+  echo ">> each header's uptime= dates that slot; a slot is stale if its boot predates the image you flashed"
   exit 0
 fi
 
@@ -105,7 +119,8 @@ cat > "$W/root/wrap.sh" <<EOF
 # generated by boot-console-wrap.sh -- see its header
 T=/system/bin/toybox
 \$T mkdir -p /dev /proc /sys /pstore
-\$T mknod -m 600 /dev/kmsg c 1 11 2>/dev/null; \$T mknod -m 666 /dev/null c 1 3 2>/dev/null; \$T mknod -m 600 /dev/console c 5 1 2>/dev/null
+# fds 0-2 are closed here: no redirections until the nodes exist (2>/dev/null would create a file)
+\$T mknod -m 666 /dev/null c 1 3; \$T mknod -m 666 /dev/zero c 1 5; \$T mknod -m 600 /dev/kmsg c 1 11; \$T mknod -m 600 /dev/console c 5 1
 exec 0</dev/null 1>/dev/kmsg 2>/dev/kmsg
 echo "wrap: rdinit start (timeout ${TIMEOUT}s, dmesg every ${EVERY}s, misc@${OFF}MiB)"
 \$T mount -t proc proc /proc; \$T mount -t sysfs sysfs /sys
@@ -125,7 +140,7 @@ if [ -n "\$MM" ]; then \$T mknod -m 600 /dev/misc b \$MM && echo "wrap: misc is 
 { echo "WRAPLOG v1 uptime=\$(\$T cat /proc/uptime)"; echo "pstore files: \$(\$T ls /pstore 2>/dev/null)"
   for f in /pstore/*; do [ -e "\$f" ] || continue; echo "===== \$f ====="; \$T cat "\$f"; done
   echo "===== WRAPLOG END ====="; } > /wraplog.txt
-[ -e /dev/misc ] && \$T dd if=/dev/zero of=/dev/misc bs=4096 seek=$SEEK count=256 conv=notrunc 2>/dev/null && \$T dd if=/wraplog.txt of=/dev/misc bs=4096 seek=$SEEK conv=notrunc 2>/dev/null && \$T sync && echo "wrap: pstore saved to misc"
+[ -e /dev/misc ] && \$T dd if=/dev/zero of=/dev/misc bs=4096 seek=$SEEK count=256 conv=notrunc 2>/dev/null && \$T dd if=/wraplog.txt of=/dev/misc bs=4096 seek=$SEEK count=256 conv=notrunc 2>/dev/null && \$T sync && echo "wrap: pstore saved to misc"
 # watchdog: own mount namespace (SwitchRoot moves every mount it can see and dies on one it
 # cannot), own tmpfs root (FreeRamdisk deletes the rootfs after switch_root)
 \$T unshare -m /system/bin/sh -c '
@@ -135,7 +150,7 @@ T=/system/bin/toybox
 \$T mkdir -p /diag/dev /diag/proc /diag/system
 \$T cp -a /system/bin /system/lib64 /system/lib /diag/system/ 2>/dev/null
 [ -e /dev/misc ] && \$T cp -a /dev/misc /diag/dev/misc
-\$T mknod -m 600 /diag/dev/kmsg c 1 11; \$T mknod -m 666 /diag/dev/null c 1 3
+\$T mknod -m 600 /diag/dev/kmsg c 1 11; \$T mknod -m 666 /diag/dev/null c 1 3; \$T mknod -m 666 /diag/dev/zero c 1 5
 \$T mount -t proc proc /diag/proc
 echo "watchdog: ns ready, chrooting"; \$T touch /diag-ready
 exec \$T chroot /diag /system/bin/sh -c "
@@ -148,7 +163,7 @@ while [ \\\$t -lt $TIMEOUT ]; do
   { echo \\"DIAGLOG v1 snapshot=\\\$n uptime=\\\$(\\\$T cat /proc/uptime)\\"; \\\$T dmesg; echo \\"===== DIAGLOG END =====\\"; } > /log.txt 2>&1
   if [ -e /dev/misc ]; then
     \\\$T dd if=/dev/zero of=/dev/misc bs=4096 seek=$((SEEK + 256)) count=256 conv=notrunc 2>/dev/null
-    \\\$T dd if=/log.txt of=/dev/misc bs=4096 seek=$((SEEK + 256)) conv=notrunc 2>/dev/null; \\\$T sync
+    \\\$T dd if=/log.txt of=/dev/misc bs=4096 seek=$((SEEK + 256)) count=256 conv=notrunc 2>/dev/null; \\\$T sync
   fi
 done
 echo \\"watchdog: timeout, last snapshot \\\$n\\"
