@@ -65,8 +65,15 @@ by itself (`reboot,<target>` with a recovery target) before the timeout: what pu
 last snapshot before that reboot. It boots permissive: after init loads the policy the watchdog is
 in the `kernel` domain, which may write kmsg and sysrq but not a block device, so an enforcing
 watchdog reboots on time and saves nothing. Dry-run the generated `/wrap.sh` up to the first misc
-write in a chroot of the ramdisk from recovery (same kernel, `set -x`) before flashing: that is
-how a missing `/dev/zero` showed up, which a flash only shows as "nothing in misc". Needs no partition changes and no working adb. The design notes
+write in a chroot of the ramdisk from recovery before flashing, as PID 1 with stdio closed the way
+the kernel starts rdinit:
+`toybox unshare -p -f chroot <rd> /system/bin/sh -c 'exec <&- >&- 2>&-; exec /dry.sh'`. Closing
+the fds anywhere outside that shell tests nothing: every bionic binary on the way (`env`, `unshare`,
+`chroot`) re-opens 0-2 on the recovery's `/dev/null` before exec, and bionic `_exit(1)`s any
+non-PID-1 process whose stdio is closed with no `/dev/null` to open -- the preamble that passed a
+plain chroot panicked the kernel 16 ms into rdinit (`Attempted to kill init! exitcode=0x00000100`,
+in ramoops). The same dry run found a missing `/dev/zero`, which a flash only shows as "nothing
+in misc". Needs no partition changes and no working adb. The design notes
 in the script header are the list of ways init kills a bystander process (`SwitchRoot`,
 `FreeRamdisk`, a visible `/system/bin/recovery`); read them before changing it.
 
