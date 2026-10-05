@@ -4,13 +4,13 @@
 or run it with `--check` to find out whether this file is stale. `propagate-forge.sh`
 does that automatically, so an engine change cannot ship with an index that lies.
 
-74 tools. Each row is `| name | what it does | usage | docs |` with a fixed column count
+75 tools. Each row is `| name | what it does | usage | docs |` with a fixed column count
 and any literal pipe escaped, so `awk -F'|'` is enough to parse it. `docs/tools.yaml`
 carries the same data for anything that would rather not parse Markdown.
 
 | tool | what it does | usage | further reading |
 |---|---|---|---|
-| [`abi-gap.sh`](../tools/abi-gap.sh) | list the symbols a prebuilt blob imports that the running platform no longer provides | `abi-gap.sh <blob> [-s SERIAL] [--keep DIR]` | [debugging-a-vendor-blob](debugging-a-vendor-blob.md) |
+| [`abi-gap.sh`](../tools/abi-gap.sh) | list the symbols a prebuilt blob imports that the running platform no longer provides | `abi-gap.sh <blob> [-s SERIAL] [--keep DIR]` | [debugging-a-vendor-blob](debugging-a-vendor-blob.md), [debugging-volte](debugging-volte.md) |
 | [`apply-overlay.sh`](../tools/apply-overlay.sh) | apply the composed customization stack onto a synced LineageOS tree: | `apply-overlay.sh` | — |
 | [`bench-launch.sh`](../tools/bench-launch.sh) | cold app-launch times over adb, for A/B-ing a runtime tuning on one phone | `bench-launch.sh` | — |
 | [`blob-attach.sh`](../tools/blob-attach.sh) | start a vendor binary under lldb-server and print the load base of one of its libraries, so you can set absolute breakpoints inside a stripped prebuilt | `blob-attach.sh <device-binary> <library-soname> [--port N] [-s SERIAL]` | [debugging-a-vendor-blob](debugging-a-vendor-blob.md) |
@@ -36,6 +36,7 @@ carries the same data for anything that would rather not parse Markdown.
 | [`diag-efs.sh`](../tools/diag-efs.sh) | read a modem EFS/NV item file over /dev/diag, on a connected device | `diag-efs.sh <buildid\|hello\|ls DIR\|read PATH\|write PATH HEX [OFLAG MODE]\|rm PATH\|probe HEX>` | — |
 | [`diag-f3.sh`](../tools/diag-f3.sh) | capture the modem's F3 debug messages (the firmware's own printf log) over /dev/diag for N seconds and decode them to text on the host | `diag-f3.sh <seconds> <out.txt>          # raw stream kept beside it as <out.txt>.bin` | [debugging-mobile-data](debugging-mobile-data.md) |
 | [`diag-f3-parse.py`](../tools/diag-f3/diag-f3-parse.py) | Parse a raw DIAG HDLC stream (as written by diag-f3-capture) and print F3 EXT_MSG (0x79) text lines | `diag-f3-parse.py` | — |
+| [`dlopen-probe.sh`](../tools/dlopen-probe.sh) | - find out, empirically, whether a prebuilt .so actually LOADS on the running device: | `dlopen-probe.sh <blob.so> [--supply DIR] [--stub LIB ...] [--preload LIB ...]` | [debugging-volte](debugging-volte.md) |
 | [`dtbo-ramoops-alt.py`](../tools/dtbo-ramoops-alt.py) | make the live ramoops console survive a clean reboot | `dtbo-ramoops-alt.py <dtbo.img> <out.img> [--index N]` | [debugging-a-boot-loop](debugging-a-boot-loop.md), [porting-a-branch-bump](porting-a-branch-bump.md) |
 | [`extract-gapps-apps.sh`](../tools/extract-gapps-apps.sh) | pull the Google versions of the stock apps out of a GApps zip and stage them as /product prebuilts, so a WITH_GAPPS build swaps the Lineage/AOSP apps for Google's | `extract-gapps-apps.sh` | — |
 | [`extract-nextbit-oem-assets.sh`](../tools/extract-nextbit-oem-assets.sh) | reclaim the Nextbit Robin OEM assets (system sounds, wallpapers, boot animation) from a Nextbit Robin stock ROM and bake them into the tree being built | `extract-nextbit-oem-assets.sh` | [OEM-ASSETS](OEM-ASSETS.md) |

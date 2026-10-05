@@ -217,3 +217,39 @@ Check the stock app's Binder surface the same way as on the Robin (`oat-to-smali
 `ether-20.0/gen-legacy-aidl.py`): the TRANSACTION_* order in the stock framework's `I*$Stub` is the wire
 protocol, and one inserted method (7.0 -> 7.1 added `IImsService.addRegistrationListener`) shifts
 every later id.
+
+## Prove the OEM's native stack loads before building it in
+
+Reusing the OEM's own IMS libraries (the SIP stack is theirs; the modem serves no IMS QMI) means a
+2016 32-bit blob against a current framework. Before any app/sepolicy/make work, answer one question:
+does it even dlopen? `abi-gap.sh` estimates the symbol gap; `dlopen-probe.sh` proves it, closure and
+constructors included.
+
+1. `abi-gap.sh <lib>` first for the shape: the SIP core usually needs a tiny, ABI-stable slice of
+   libutils/libbinder (on the V20, `libims.so` was 7 missing symbols -- 5 `uuid_*` from the dropped
+   `libext2_uuid.so`, 2 libutils helpers). The media lib carries the real drift (Surface ctor sizeof,
+   camera/GraphicBufferMapper/AudioSystem), and it is all video -- irrelevant to voice.
+2. `dlopen-probe.sh <lib> --supply <stock extract> --stub <cut-out libs> --preload <your shims>`:
+   it dlopens on the device from the shell default namespace (which, unlike an app's classloader
+   namespace, can reach /system/lib + the staging dir -- so this isolates the ABI question from the
+   packaging one), auto-walks the DT_NEEDED closure out of the stock extract, and reports the first
+   real symbol gap. Supply the pure-libc/vendor deps from stock (uuid, the QMI client stack); empty-
+   `--stub` the subsystems you are cutting (video codecs: libOmx*, libstagefrighthw -- co-loading the
+   stock ones fails on libbinder vtable thunks anyway); `--preload` the shims you author.
+3. Author two kinds of shim, freestanding (`-nostdlibinc`, declare the handful of libc funcs you call,
+   link against the device's pulled libutils/libc):
+   - **real reimpl** for a dropped helper whose behaviour you can reproduce (`String8::getPathLeaf`
+     calls the live String8 ctor; `strndup16to8` is a self-contained UTF16->UTF8).
+   - **load-only stub** for a symbol on a path you will never call: give it the exact mangled name
+     with an `__asm__("<mangled>")` label on a function returning 0. Mark it clearly -- a stubbed
+     `Surface` ctor or `AudioSystem::setParameters` satisfies the loader and crashes if used. Make the
+     one symbol on the path you DO need (voice audio: `AudioSystem::setParameters`) real before relying
+     on it.
+   Preload shims via `LD_PRELOAD`, not a dlopen-RTLD_GLOBAL: on 32-bit bionic RTLD_GLOBAL is 0x2 and
+   the global-group route does not reliably expose a preload's symbols to a later dlopen.
+
+A clean "OK ... loaded" means the closure resolves and no constructor faulted -- the dlopen/onCreate-
+native layer is cleared. It does NOT mean the lib works (abi-gap.sh's header: semantic drift, grown
+types). The remaining order is: real-shim the few on-path symbols, package as an app namespace
+(ld.config.txt + sepolicy) or host the stack in the telephony process (how the Robin bridge dodged the
+namespace wall), then the Binder/AIDL bridge, then feed the modem.

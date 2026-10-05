@@ -13,6 +13,7 @@ container.
 | `find-orphaned-sepolicy-types.sh` | before porting | SELinux types the device references that the new branch deleted |
 | `find-removed-platform-symbols.sh` | before porting | C/C++ platform constants it lost |
 | `abi-gap.sh` | when a prebuilt will not load, or loads and misbehaves | the symbols a blob imports that the running platform no longer exports, demangled. The runtime counterpart to `find-removed-platform-symbols.sh`: that one catches what will not compile, this one what will not link |
+| `dlopen-probe.sh` | to prove (not estimate) a prebuilt loads on the device | dlopens the blob + its whole DT_NEEDED closure on-device, running the init-array; auto-walks the closure from a stock extract (`--supply`), empty-stubs cut-out subsystems (`--stub`), LD_PRELOADs your shim libs (`--preload`). Ground truth behind `abi-gap.sh` |
 | `find-soong-namespace-drift.sh` | before porting | Soong namespaces the device must now import, modules and HIDL libraries the branch deleted (including what the blobs link against), makefile paths that moved |
 | `triage-build-log.sh` | after a failed build | a wall of errors collapsed into a few classes |
 | `check-image-labels.sh` | when packaging fails | every unlabeled path at once, instead of one per build |
