@@ -194,6 +194,19 @@ than guess, and bank each hop; every one is a hook a bridge can call directly:
 5. **Modem side.** `modem-strings.sh <modem.image> <out>`: `qmi-req.txt` names the server handler
    (`qmi_vss_set_ims_status_req`), `all.txt` the code it feeds (`cmss.c lgp_set_ims_status`, then
    `cmsds.c` domain-selection lines), `efs.txt` the NV items that gate it.
+6. **Inside the compressed modem code.** `modem-strings.sh` only recovers plaintext; ~85% of a Hexagon
+   modem is q6zip-compressed, so a log line you can see does not mean its *branch* is visible. To read
+   the code: `modem-decompress.sh <modem.image|elf> <out>` reassembles the ELF, decompresses the q6zip
+   code segment to a flat VA image and disassembles it (`out/q6.dis`, based at the dlpager VA, typically
+   0xd0000000). Then `modem-xrefs.py <modem.elf> msg <rodata VA>` turns a QShrink msg_const into its
+   string, and `grep` in `q6.dis` for the `immext(#<strptr>)` that loads it finds the exact log site --
+   read the enclosing function to see the condition. This is how you confirm whether a mode is real or
+   dead code: trace the flag the branch tests back to its writer. A flag that is **read but never
+   written** anywhere (no store in q6.dis nor the uncompressed `llvm-objdump -d modem.elf`, no data
+   pointer via `modem-xrefs.py ptr`, and `modem-xrefs.py read <VA>` returns nothing = it is in
+   demand-zero BSS) defaults to 0 -- the mode exists in the binary but nothing arms it. (Real example:
+   LG's "3rd Party IMS Enabled" domain-selection mode on the V20 is gated on a `cmsds` global byte that
+   nothing sets, so no EFS item turns it on.)
 
 Expect more than one route for the same fact, split by operator (`setRegiStateForVZW` vs the
 generic path), and expect one of them to be a standard Qualcomm message hiding behind an OEM RIL

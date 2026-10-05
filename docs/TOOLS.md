@@ -4,7 +4,7 @@
 or run it with `--check` to find out whether this file is stale. `propagate-forge.sh`
 does that automatically, so an engine change cannot ship with an index that lies.
 
-72 tools. Each row is `| name | what it does | usage | docs |` with a fixed column count
+74 tools. Each row is `| name | what it does | usage | docs |` with a fixed column count
 and any literal pipe escaped, so `awk -F'|'` is enough to parse it. `docs/tools.yaml`
 carries the same data for anything that would rather not parse Markdown.
 
@@ -56,7 +56,9 @@ carries the same data for anything that would rather not parse Markdown.
 | [`make-keys.sh`](../tools/make-keys.sh) | generate the signing keys for release builds, once, into a directory outside every repo | `make-keys.sh` | [RELEASING](RELEASING.md) |
 | [`mcfg-items.py`](../tools/mcfg-items.py) | list the EFS items a Qualcomm MCFG provisions, with their values | `mcfg-items.py mcfg_sw.mbn              # every EFS item: path, size, value` | — |
 | [`measure-touch-rate.sh`](../tools/measure-touch-rate.sh) | Measure how fast the touchscreen actually reports, while a finger is down | `measure-touch-rate.sh` | — |
+| [`modem-decompress.sh`](../tools/modem-decompress.sh) | - decompress a Qualcomm Hexagon modem's q6zip code segment into a flat image you can disassemble, so the ~85% of the firmware that `modem-strings.sh` can't see becomes readable | `modem-decompress.sh <modem.elf\|dir\|modem.image> <outdir>` | [debugging-volte](debugging-volte.md) |
 | [`modem-strings.sh`](../tools/modem-strings.sh) | pull the readable strings out of a modem firmware (the `modem.b*` segments) and sort them into the three lists that answer porting questions: | `modem-strings.sh <modem.image\|dir with modem.b*\|/firmware/image via adb:> <outdir>` | [debugging-volte](debugging-volte.md) |
+| [`modem-xrefs.py`](../tools/modem-xrefs.py) | - cross-reference a Qualcomm Hexagon modem: | `modem-xrefs.py <modem.elf> str   "<substring>"      strings matching, their pointers and immext refs` | [debugging-volte](debugging-volte.md) |
 | [`new-device-repo.sh`](../tools/new-device-repo.sh) | scaffold a device repo from scratch | `new-device-repo.sh` | — |
 | [`oat-to-smali.sh`](../tools/oat-to-smali.sh) | turn a stock boot oat, app odex, vdex or apk into readable smali, so an OEM framework or app can be traced (Binder TRANSACTION_ ids, RIL request numbers, OEM hook calls) | `oat-to-smali.sh <file.oat\|.odex\|.vdex\|.apk\|.dex> <outdir>` | [debugging-volte](debugging-volte.md) |
 | [`ota-extract.sh`](../tools/ota-extract.sh) | pull the partition images out of a signed A/B OTA zip, and optionally flash them to one slot | `ota-extract.sh <ota.zip> <outdir> [--flash a\|b] [--os-only] [-s SERIAL]` | [debugging-a-vendor-blob](debugging-a-vendor-blob.md) |
