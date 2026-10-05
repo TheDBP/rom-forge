@@ -4,7 +4,7 @@
 or run it with `--check` to find out whether this file is stale. `propagate-forge.sh`
 does that automatically, so an engine change cannot ship with an index that lies.
 
-68 tools. Each row is `| name | what it does | usage | docs |` with a fixed column count
+72 tools. Each row is `| name | what it does | usage | docs |` with a fixed column count
 and any literal pipe escaped, so `awk -F'|'` is enough to parse it. `docs/tools.yaml`
 carries the same data for anything that would rather not parse Markdown.
 
@@ -43,6 +43,7 @@ carries the same data for anything that would rather not parse Markdown.
 | [`find-orphaned-sepolicy-types.sh`](../tools/find-orphaned-sepolicy-types.sh) | list SELinux types a device tree still references but that no longer exist, after an upstream branch bump deleted the policy that defined them | `find-orphaned-sepolicy-types.sh` | [porting-a-branch-bump](porting-a-branch-bump.md) |
 | [`find-removed-platform-symbols.sh`](../tools/find-removed-platform-symbols.sh) | C/C++ constants a device tree uses that the new branch deleted | `find-removed-platform-symbols.sh` | [porting-a-branch-bump](porting-a-branch-bump.md) |
 | [`find-soong-namespace-drift.sh`](../tools/find-soong-namespace-drift.sh) | Soong namespace and manifest changes between branches that will break a device tree the new branch no longer maintains | `find-soong-namespace-drift.sh` | [porting-a-branch-bump](porting-a-branch-bump.md) |
+| [`fn-calls.sh`](../tools/fn-calls.sh) | what one function in a stripped-of-source vendor library calls, and the constants it passes: | `fn-calls.sh <lib.so> <symbol\|0xaddr> [--len BYTES] [--all] [--dis out.dis]` | [debugging-volte](debugging-volte.md) |
 | [`freestanding-arm64.sh`](../tools/freestanding-arm64.sh) | cross-compile one of the freestanding arm64 helpers (no libc, raw syscalls, own _start) in the cached cross-compile container and push it to /data/local/tmp | `freestanding-arm64.sh` | — |
 | [`gen-tool-index.py`](../tools/gen-tool-index.py) | regenerate the tool index from the tools themselves | `gen-tool-index.py            # rewrite docs/TOOLS.md and docs/tools.yaml` | — |
 | [`hybrid-bootimg.sh`](../tools/hybrid-bootimg.sh) | a boot image with one build's kernel+dtb and another's ramdisk | `hybrid-bootimg.sh <kernel-from.img> <ramdisk-from.img> <out.img>` | [porting-a-branch-bump](porting-a-branch-bump.md) |
@@ -55,7 +56,9 @@ carries the same data for anything that would rather not parse Markdown.
 | [`make-keys.sh`](../tools/make-keys.sh) | generate the signing keys for release builds, once, into a directory outside every repo | `make-keys.sh` | [RELEASING](RELEASING.md) |
 | [`mcfg-items.py`](../tools/mcfg-items.py) | list the EFS items a Qualcomm MCFG provisions, with their values | `mcfg-items.py mcfg_sw.mbn              # every EFS item: path, size, value` | — |
 | [`measure-touch-rate.sh`](../tools/measure-touch-rate.sh) | Measure how fast the touchscreen actually reports, while a finger is down | `measure-touch-rate.sh` | — |
+| [`modem-strings.sh`](../tools/modem-strings.sh) | pull the readable strings out of a modem firmware (the `modem.b*` segments) and sort them into the three lists that answer porting questions: | `modem-strings.sh <modem.image\|dir with modem.b*\|/firmware/image via adb:> <outdir>` | [debugging-volte](debugging-volte.md) |
 | [`new-device-repo.sh`](../tools/new-device-repo.sh) | scaffold a device repo from scratch | `new-device-repo.sh` | — |
+| [`oat-to-smali.sh`](../tools/oat-to-smali.sh) | turn a stock boot oat, app odex, vdex or apk into readable smali, so an OEM framework or app can be traced (Binder TRANSACTION_ ids, RIL request numbers, OEM hook calls) | `oat-to-smali.sh <file.oat\|.odex\|.vdex\|.apk\|.dex> <outdir>` | [debugging-volte](debugging-volte.md) |
 | [`ota-extract.sh`](../tools/ota-extract.sh) | pull the partition images out of a signed A/B OTA zip, and optionally flash them to one slot | `ota-extract.sh <ota.zip> <outdir> [--flash a\|b] [--os-only] [-s SERIAL]` | [debugging-a-vendor-blob](debugging-a-vendor-blob.md) |
 | [`pixel-ramoops-pull.sh`](../tools/pixel-ramoops-pull.sh) | decrypt the panic log a Pixel's bootloader saved, from recovery | `pixel-ramoops-pull.sh --genkey <keydir>          once: make a keypair, load its pubkey` | — |
 | [`pmsg-decode.py`](../tools/pmsg-decode.py) | decode a pstore pmsg record into readable logcat text | `pmsg-decode.py <pmsg-ramoops-N> [out.txt]` | — |
@@ -71,6 +74,7 @@ carries the same data for anything that would rather not parse Markdown.
 | [`release.sh`](../tools/release.sh) | publish the redistributable preset of a build, and refuse to publish anything else | `release.sh` | [OEM-ASSETS](OEM-ASSETS.md), [RELEASING](RELEASING.md) |
 | [`repack-erofs-apex.sh`](../tools/repack-erofs-apex.sh) | rebuild an APEX whose payload is EROFS so the payload is ext4 instead | `repack-erofs-apex.sh <dir-to-scan> [--aosp /aosp] [--keys DIR] [--dry-run]` | — |
 | [`run-one.sh`](../tools/run-one.sh) | build exactly one device, and refuse if anything else is already building | `run-one.sh` | — |
+| [`sideload-flash.sh`](../tools/sideload-flash.sh) | unattended recovery flash of a ROM zip: | `sideload-flash.sh <rom.zip> [--wipe] [--recovery <img>] [-s SERIAL] [--check '<shell cmds>'] [--timeout S]` | — |
 | [`slot-switch.sh`](../tools/slot-switch.sh) | switch an A/B device between the ROMs parked on its two slots, wiping the shared /data so the older one can boot, and putting the fresh install straight on the launcher | `slot-switch.sh <a\|b> [--keep-data] [--no-provision] [-s SERIAL]` | — |
 | [`super-loop-mount.sh`](../tools/super-loop-mount.sh) | mount a dynamic (logical) partition from recovery without device-mapper | `super-loop-mount.sh --list                       partitions, extents, byte offsets` | — |
 | [`symbolize-odex-pcs.py`](../tools/symbolize-odex-pcs.py) | Turn the bare "pc 0000000002430 70c  /system/framework/oat/arm64/services.odex" frames of an ANR/tombstone native dump into Java method names | `symbolize-odex-pcs.py` | — |

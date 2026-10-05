@@ -168,7 +168,39 @@ stores into the buffer before the call (the V20 one is a 32-byte `{type, last, l
 session, seq, 0}` with 220-byte fragments). The indication handler's jump table gives the
 modem-to-AP message types the same way.
 
-Check the stock app's Binder surface the same way as on the Robin (`deodex-app.sh`,
-`gen-legacy-aidl.py`): the TRANSACTION_* order in the stock framework's `I*$Stub` is the wire
+## Trace how the OEM app talks to the modem, layer by layer
+
+An AP-side IMS stack still has to tell the modem it is registered (domain selection, SRVCC, CSFB
+decisions live in the modem). That path is not where you expect -- on the V20 the private QMI hook
+turned out to be only the media pipe, and registration went through the OEM's RIL. Trace it rather
+than guess, and bank each hop; every one is a hook a bridge can call directly:
+
+1. **App -> framework.** `oat-to-smali.sh <stock Ims apk/odex>`, grep the registration agent for
+   `invoke-interface` on OEM Binder interfaces (`I*Phone`, `setSysInfo`, `LgSvcCmd`). The interface
+   name in `asInterface` (`"com.lge.ims.phone"`) tells you which process implements it; the stub is
+   wherever `strings` on the boot oats finds the class (`boot-telephony-common.oat`, not the
+   telephony app).
+2. **Framework -> RIL request.** `oat-to-smali.sh` on that boot oat; follow the dispatch
+   (`setSysInfo(type, ..)` is a switch -- record the whole type table, it is the OEM's modem API) to
+   a `RILRequest;->obtain(I..)` whose `const/16` is the RIL request number. The `RIL.smali` method
+   also shows the parcel layout (`writeInt` order).
+3. **RIL request -> qcril handler.** `strings vendor/lib64/libril-qc-qmi-1.so | grep -i <keyword>`
+   names the handler (`qcril_qmi_lge_vss_set_modem_info`, `lge_qcril_qmi_nas_hvolte_update_ims_status_request`).
+4. **Handler -> QMI message.** `fn-calls.sh <qcril lib> <handler>`: the immediates in front of the
+   `*_send_cmd`/`qmi_client_send_msg_sync` call are the message id, request length and timeout.
+   `qmi-services.py idl <idl lib> <svc>` gives that message's TLV layout; its C struct size must equal
+   the length passed, which is the check that you read the right id. A handler that goes through a
+   generic `raw_cmd(kind, item, ..)` dispatcher picks the id from a stack slot -- use `--dis`.
+5. **Modem side.** `modem-strings.sh <modem.image> <out>`: `qmi-req.txt` names the server handler
+   (`qmi_vss_set_ims_status_req`), `all.txt` the code it feeds (`cmss.c lgp_set_ims_status`, then
+   `cmsds.c` domain-selection lines), `efs.txt` the NV items that gate it.
+
+Expect more than one route for the same fact, split by operator (`setRegiStateForVZW` vs the
+generic path), and expect one of them to be a standard Qualcomm message hiding behind an OEM RIL
+number -- `RIL 292 -> NAS 0x0072 update_ims_status` is what any non-OEM IMS stack would send, and
+it does not need the OEM's RIL at all.
+
+Check the stock app's Binder surface the same way as on the Robin (`oat-to-smali.sh`, then
+`ether-20.0/gen-legacy-aidl.py`): the TRANSACTION_* order in the stock framework's `I*$Stub` is the wire
 protocol, and one inserted method (7.0 -> 7.1 added `IImsService.addRegistrationListener`) shifts
 every later id.
