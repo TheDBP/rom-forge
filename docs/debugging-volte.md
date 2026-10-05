@@ -281,7 +281,14 @@ Robin (QTI, A13) and the V20 (LG, A17). The pieces, in order:
 3. **Parcelables: stub for load, real for calls.** AOSP parcelables whose only quick op is
    `return-void-no-barrier` are clean after one sed. The rest (OEM parcelables, UCE/RCS) can be minimal
    `implements Parcelable` stubs for the *load* milestone (they are off the service-start path), made
-   real only when a call actually marshals them.
+   real only when a call actually marshals them. Before relying on "real": check WHICH jar the OEM's
+   parcelables live in and that the merged tree actually got them -- `grep -c '^.field'` the merged
+   `ImsCallProfile.smali`. On the V20 they are in `boot-framework` (not `boot-ims-common`), so the
+   build-time stubs (1 field) silently shipped and REGISTER worked while a call would have arrived
+   with no number. The stock framework oat is **multidex**: `baksmali x <oat>` deodexes only the first
+   dex entry (framework.jar's `com/*` is in `classes2.dex`) -- `deodex-jar.sh` now walks every entry
+   from `baksmali list dex`; a single-entry deodex of framework.jar is the classic partial that LOOKS
+   complete (5990 files, zero quick opcodes, no `com/`).
 4. **Rename + merge.** `merge-legacy-classes.py --app <smali> --legacy <clean-dirs> --old com/android/ims
    --new <private/pkg> --out <merged>` renames every type descriptor and exact-match AIDL descriptor
    string (not broadcast actions), merges the legacy closure in, and redirects the @hide specialized
@@ -294,7 +301,14 @@ Robin (QTI, A13) and the V20 (LG, A17). The pieces, in order:
    `extractNativeLibs=true`) -- that forces the process 32-bit AND puts the libs in the app namespace's
    own permitted path, so only the framework libs need public.libraries; see the load section above.
 6. **Then** the Binder/AIDL bridge (the compat ImsService), the ImsResolver config, sepolicy (author it;
-   expect runtime denials), and the modem reg path.
+   expect runtime denials), and the modem reg path. Bridge gotcha for a 7.0-shape `IImsService` (one
+   listener slot, `setRegistrationListener` REPLACES, no `addRegistrationListener`): the compat layer
+   adds two listeners after `startSession`, so hand ONE multicast adapter to `open()`, fan out, and
+   cache the last connected/disconnected/feature-bitmap/URIs to replay to late joiners. The OEM app
+   replays only connected/disconnected to a new listener and emits the feature bitmap only on a UC
+   state CHANGE -- a bridge that opens after registration completed reports "registered, voice
+   disabled" forever (every call goes CS); rebuild the bitmap from `isConnected(id, NORMAL, VOICE/VT)`
+   after `open()` returns (not inside the callback: that is a nested binder call).
 
 ## Get the reworked OEM app to RUN (the runtime-bringup layer)
 
