@@ -19,7 +19,8 @@ tools:
     path: "tools/apply-method-redirects.py"
     summary: "- rewrite framework-API-drift call sites in a smali tree from a rules file"
     usage: "apply-method-redirects.py <redirects.txt> <smali-dir>"
-    docs: []
+    docs:
+      - "docs/debugging-volte.md"
   - name: "apply-overlay.sh"
     path: "tools/apply-overlay.sh"
     summary: "apply the composed customization stack onto a synced LineageOS tree:"
