@@ -4,7 +4,7 @@
 or run it with `--check` to find out whether this file is stale. `propagate-forge.sh`
 does that automatically, so an engine change cannot ship with an index that lies.
 
-83 tools. Each row is `| name | what it does | usage | docs |` with a fixed column count
+84 tools. Each row is `| name | what it does | usage | docs |` with a fixed column count
 and any literal pipe escaped, so `awk -F'|'` is enough to parse it. `docs/tools.yaml`
 carries the same data for anything that would rather not parse Markdown.
 
@@ -13,7 +13,7 @@ carries the same data for anything that would rather not parse Markdown.
 | [`abi-gap.sh`](../tools/abi-gap.sh) | list the symbols a prebuilt blob imports that the running platform no longer provides | `abi-gap.sh <blob> [-s SERIAL] [--keep DIR]` | [debugging-a-vendor-blob](debugging-a-vendor-blob.md), [debugging-volte](debugging-volte.md) |
 | [`app-fw-api-gap.py`](../tools/app-fw-api-gap.py) | - preflight a ported app against a target framework: | `app-fw-api-gap.py --app <app-smali-dir> --fw <framework.jar\|dir\|smali-dir>[,<more>...] [--pkg android,javax,...]` | [debugging-volte](debugging-volte.md) |
 | [`apply-overlay.sh`](../tools/apply-overlay.sh) | apply the composed customization stack onto a synced LineageOS tree: | `apply-overlay.sh` | — |
-| [`aps2-relocs.py`](../tools/aps2-relocs.py) | decode the Android-packed (APS2) dynamic relocations of a prebuilt ELF .so and print each one with its target symbol, because llvm-readelf/readelf cannot symbolise SHT_ANDROID_REL ("unable to read an entry | `aps2-relocs.py <lib.so> [HEXOFFSET ...]      # all relocs, or only those at the given file offsets` | — |
+| [`aps2-relocs.py`](../tools/aps2-relocs.py) | decode the Android-packed (APS2) dynamic relocations of a prebuilt ELF .so and print each one with its target symbol, because llvm-readelf/readelf cannot symbolise SHT_ANDROID_REL ("unable to read an entry | `aps2-relocs.py <lib.so> [HEXOFFSET ...]      # all relocs, or only those at the given file offsets` | [debugging-a-vendor-blob](debugging-a-vendor-blob.md) |
 | [`bench-launch.sh`](../tools/bench-launch.sh) | cold app-launch times over adb, for A/B-ing a runtime tuning on one phone | `bench-launch.sh` | — |
 | [`blob-attach.sh`](../tools/blob-attach.sh) | start a vendor binary under lldb-server and print the load base of one of its libraries, so you can set absolute breakpoints inside a stripped prebuilt | `blob-attach.sh <device-binary> <library-soname> [--port N] [-s SERIAL]` | [debugging-a-vendor-blob](debugging-a-vendor-blob.md) |
 | [`blob-fixups.sh`](../tools/blob-fixups.sh) | rewrite DT_NEEDED / DT_SONAME in prebuilt vendor blobs from a declarative list, the way LineageOS extract-files.sh `blob_fixup` does, but at overlay time against a synced tree | `blob-fixups.sh <aosp-root> <list-file>        (apply-overlay.sh runs this on overlay/blob-fixups)` | — |
@@ -67,7 +67,7 @@ carries the same data for anything that would rather not parse Markdown.
 | [`modem-strings.sh`](../tools/modem-strings.sh) | pull the readable strings out of a modem firmware (the `modem.b*` segments) and sort them into the three lists that answer porting questions: | `modem-strings.sh <modem.image\|dir with modem.b*\|/firmware/image via adb:> <outdir>` | [debugging-volte](debugging-volte.md) |
 | [`modem-xrefs.py`](../tools/modem-xrefs.py) | - cross-reference a Qualcomm Hexagon modem: | `modem-xrefs.py <modem.elf> str   "<substring>"      strings matching, their pointers and immext refs` | [debugging-volte](debugging-volte.md) |
 | [`new-device-repo.sh`](../tools/new-device-repo.sh) | scaffold a device repo from scratch | `new-device-repo.sh` | — |
-| [`ninja-commands.sh`](../tools/ninja-commands.sh) | print (or run) the exact compile/link commands for ONE Soong module out of the tree's existing ninja graph, so a shim or small cc module can be iterated in seconds without `m` | `ninja-commands.sh <module\|target-path> [--run] [--variant SUBSTR] [-C <tree/src>]` | — |
+| [`ninja-commands.sh`](../tools/ninja-commands.sh) | print (or run) the exact compile/link commands for ONE Soong module out of the tree's existing ninja graph, so a shim or small cc module can be iterated in seconds without `m` | `ninja-commands.sh <module\|target-path> [--run] [--variant SUBSTR] [-C <tree/src>]` | [debugging-a-vendor-blob](debugging-a-vendor-blob.md) |
 | [`oat-to-smali.sh`](../tools/oat-to-smali.sh) | turn a stock boot oat, app odex, vdex or apk into readable smali, so an OEM framework or app can be traced (Binder TRANSACTION_ ids, RIL request numbers, OEM hook calls) | `oat-to-smali.sh <file.oat\|.odex\|.vdex\|.apk\|.dex> <outdir>` | [debugging-volte](debugging-volte.md) |
 | [`ota-extract.sh`](../tools/ota-extract.sh) | pull the partition images out of a signed A/B OTA zip, and optionally flash them to one slot | `ota-extract.sh <ota.zip> <outdir> [--flash a\|b] [--os-only] [-s SERIAL]` | [debugging-a-vendor-blob](debugging-a-vendor-blob.md) |
 | [`pixel-ramoops-pull.sh`](../tools/pixel-ramoops-pull.sh) | decrypt the panic log a Pixel's bootloader saved, from recovery | `pixel-ramoops-pull.sh --genkey <keydir>          once: make a keypair, load its pubkey` | — |
@@ -83,6 +83,7 @@ carries the same data for anything that would rather not parse Markdown.
 | [`rc-fatal-services.py`](../tools/rc-fatal-services.py) | which init services of a built image can take the device down, and whether they can start | `rc-fatal-services.py <out>/target/product/<device> [--all]` | [debugging-a-boot-loop](debugging-a-boot-loop.md) |
 | [`refresh-patches.sh`](../tools/refresh-patches.sh) | re-export overlay/patches/ from the local commits sitting on top of upstream in each patched project | `refresh-patches.sh` | [porting-a-branch-bump](porting-a-branch-bump.md) |
 | [`release.sh`](../tools/release.sh) | publish the redistributable preset of a build, and refuse to publish anything else | `release.sh` | [OEM-ASSETS](OEM-ASSETS.md), [RELEASING](RELEASING.md) |
+| [`rename-import.py`](../tools/rename-import.py) | - point ONE blob's import of a symbol at a differently-named replacement, by | `rename-import.py <lib.so> <old-symbol> <new-symbol> [--check]` | — |
 | [`repack-erofs-apex.sh`](../tools/repack-erofs-apex.sh) | rebuild an APEX whose payload is EROFS so the payload is ext4 instead | `repack-erofs-apex.sh <dir-to-scan> [--aosp /aosp] [--keys DIR] [--dry-run]` | — |
 | [`run-one.sh`](../tools/run-one.sh) | build exactly one device, and refuse if anything else is already building | `run-one.sh` | — |
 | [`sideload-flash.sh`](../tools/sideload-flash.sh) | unattended recovery flash of a ROM zip: | `sideload-flash.sh <rom.zip> [--wipe] [--recovery <img>] [-s SERIAL] [--check '<shell cmds>'] [--timeout S]` | — |
