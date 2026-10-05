@@ -295,3 +295,49 @@ Robin (QTI, A13) and the V20 (LG, A17). The pieces, in order:
    own permitted path, so only the framework libs need public.libraries; see the load section above.
 6. **Then** the Binder/AIDL bridge (the compat ImsService), the ImsResolver config, sepolicy (author it;
    expect runtime denials), and the modem reg path.
+
+## Get the reworked OEM app to RUN (the runtime-bringup layer)
+
+Rebuilding the app so it *assembles* (previous section) is half of it; getting the process to survive
+onCreate and register its service is the other half, and it comes as a sequence of distinct failures,
+each with its own signature. Observed bringing LG's `Ims4` up on A17; the order is general.
+
+1. **Boot hang, system_server FATAL at `onSystemReady`**: `"Signature|privileged permissions not in
+   privileged permission allowlist: <pkg> <perm>"`. A priv-app requesting `signature|privileged`
+   permissions must be allowlisted. Generate the allowlist from the app's own manifest --
+   `aapt2 dump permissions app.apk | grep uses-permission` -> a `privapp-permissions-<pkg>.xml` in
+   `/system/etc/permissions` (or system_ext). Missing this takes the whole boot down, not just the app.
+2. **`NoClassDefFoundError` for an OEM framework class** (`com.lge.os.Build`, ...): the app calls into
+   the OEM's framework extensions, absent on AOSP. Hand-write a minimal smali stub with exactly the
+   fields/methods the app reads (check the `sget`/`invoke` sites) and merge it in (an `extra-smali`
+   dir). Scope them with `grep -rhoE "Lcom/<oem>/[A-Za-z0-9_/$]+;"` on the app smali minus what the apk
+   itself defines.
+3. **Package silently not installed, PM log `"Signature mismatch for shared user"`**: an app with
+   `sharedUserId` (android.uid.phone/.system) must be signed with the SAME key as the others in that
+   uid. That is the key THIS build signed platform apps with -- frequently build/make's default
+   `platform` key, NOT testkey and NOT a custom release key. Read the device's actual platform cert
+   from an installed platform app and match it (`push-system-app.sh` does this).
+4. **`NoSuchMethodError` on a framework class** (`SubscriptionManager.getSlotId` -> `getSlotIndex`):
+   API drift -- the class survived, the method was renamed/removed. Redirect old->new in smali
+   (same signature) via a `method-redirects.txt`. Find these ahead of time with `app-fw-api-gap.py`.
+5. **`SecurityException`/property-set failure, then avc denials**: sepolicy. The app sets properties
+   (`avc denied { set } property=... tclass=property_service`), opens sockets, reads files. It runs in
+   whatever domain its uid maps to (android.uid.phone -> `radio`). **You usually cannot iterate this at
+   runtime** -- `setenforce 0` is denied on a locked policy -- so sepolicy changes need a reflash. The
+   efficient path is the standard vendor-component bringup: make the domain permissive (its own seapp
+   domain, or the shared one) for one reflash, let it run through surfacing every denial, `audit2allow`,
+   then write real rules and lock down.
+
+**Iterate dex/resource fixes without reflashing** with `push-system-app.sh` (a ~3-min loop vs a ~45-min
+rebuild+reflash). It handles the three traps: shared-uid signing (matches the device cert), and the
+flaky block-`/system` remount (only the first `mount -o rw,remount /` after a clean boot persists, so
+it pushes to /data and `cp`s within one root shell on a fresh boot, then reboots for PM to rescan).
+sepolicy and anything in the boot image still need a real reflash.
+
+**Preflight the API drift** with `app-fw-api-gap.py --app <smali> --fw <all framework jars>`: it finds
+the `NoSuchMethod`/`NoClassDef` the app will throw, statically, so you fix them in one batch instead of
+one reboot each. It is inheritance-aware and conservative (won't flag a method whose class's full
+ancestry is not in the DB), so ACCURACY HINGES ON A COMPLETE `--fw`: on modern Android the framework is
+split across mainline modules (SubscriptionManager is in framework-telephony, not framework.jar), so
+pass EVERY `/system/framework/*.jar` + all apex `/javalib/*.jar` (incl. core-oj/core-libart for the
+java.* ancestry) or it stays silent on classes it cannot see. It complements, not replaces, the runtime.

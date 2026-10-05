@@ -4,13 +4,14 @@
 or run it with `--check` to find out whether this file is stale. `propagate-forge.sh`
 does that automatically, so an engine change cannot ship with an index that lies.
 
-78 tools. Each row is `| name | what it does | usage | docs |` with a fixed column count
+80 tools. Each row is `| name | what it does | usage | docs |` with a fixed column count
 and any literal pipe escaped, so `awk -F'|'` is enough to parse it. `docs/tools.yaml`
 carries the same data for anything that would rather not parse Markdown.
 
 | tool | what it does | usage | further reading |
 |---|---|---|---|
 | [`abi-gap.sh`](../tools/abi-gap.sh) | list the symbols a prebuilt blob imports that the running platform no longer provides | `abi-gap.sh <blob> [-s SERIAL] [--keep DIR]` | [debugging-a-vendor-blob](debugging-a-vendor-blob.md), [debugging-volte](debugging-volte.md) |
+| [`app-fw-api-gap.py`](../tools/app-fw-api-gap.py) | - preflight a ported app against a target framework: | `app-fw-api-gap.py --app <app-smali-dir> --fw <framework.jar\|dir\|smali-dir>[,<more>...] [--pkg android,javax,...]` | [debugging-volte](debugging-volte.md) |
 | [`apply-overlay.sh`](../tools/apply-overlay.sh) | apply the composed customization stack onto a synced LineageOS tree: | `apply-overlay.sh` | — |
 | [`bench-launch.sh`](../tools/bench-launch.sh) | cold app-launch times over adb, for A/B-ing a runtime tuning on one phone | `bench-launch.sh` | — |
 | [`blob-attach.sh`](../tools/blob-attach.sh) | start a vendor binary under lldb-server and print the load base of one of its libraries, so you can set absolute breakpoints inside a stripped prebuilt | `blob-attach.sh <device-binary> <library-soname> [--port N] [-s SERIAL]` | [debugging-a-vendor-blob](debugging-a-vendor-blob.md) |
@@ -73,6 +74,7 @@ carries the same data for anything that would rather not parse Markdown.
 | [`propagate-forge.sh`](../tools/propagate-forge.sh) | push an engine change out to every device repo, now | `propagate-forge.sh` | — |
 | [`pstore-pull.sh`](../tools/pstore-pull.sh) | pull every pstore record from a phone in recovery, plus (optionally) the raw ramoops region behind it | `pstore-pull.sh <outdir> [--raw /dev/access-ramoops] [-s SERIAL]` | [debugging-a-boot-loop](debugging-a-boot-loop.md), [porting-a-branch-bump](porting-a-branch-bump.md) |
 | [`publish-kernel-source.sh`](../tools/publish-kernel-source.sh) | publish the kernel source that actually built this ROM, as a normal kernel repo, so a GPL request (or an XDA moderator) can be answered with one link | `publish-kernel-source.sh` | — |
+| [`push-system-app.sh`](../tools/push-system-app.sh) | - iterate a reworked /system app on an already-flashed device WITHOUT a full ROM reflash: | `push-system-app.sh <reworked.apk> <device-install-dir> [-s SERIAL]` | [debugging-volte](debugging-volte.md) |
 | [`qmi-services.py`](../tools/qmi-services.py) | list the QMI services a device's processors publish, by name, and the QMI service descriptors (service id, IDL version, message ids) a vendor library carries | `qmi-services.py live\|table\|lib\|idl <args>` | [debugging-volte](debugging-volte.md) |
 | [`qmi-sni.sh`](../tools/qmi-sni.sh) | bring up a modem data call from the AP as a direct QMI WDS client, bypassing the RIL, and print the modem's own answer: | `qmi-sni.sh <node> <apn> <3gpp-profile> [v4\|v6\|v4v6] [epc\|umts\|none] [calltype] [keep] [sub] [muxN]` | [debugging-mobile-data](debugging-mobile-data.md) |
 | [`rc-fatal-services.py`](../tools/rc-fatal-services.py) | which init services of a built image can take the device down, and whether they can start | `rc-fatal-services.py <out>/target/product/<device> [--all]` | [debugging-a-boot-loop](debugging-a-boot-loop.md) |
