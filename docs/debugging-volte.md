@@ -253,3 +253,45 @@ native layer is cleared. It does NOT mean the lib works (abi-gap.sh's header: se
 types). The remaining order is: real-shim the few on-path symbols, package as an app namespace
 (ld.config.txt + sepolicy) or host the stack in the telephony process (how the Robin bridge dodged the
 namespace wall), then the Binder/AIDL bridge, then feed the modem.
+
+## Rework an OEM legacy IMS app to run on a newer Android
+
+When the IMS implementation is an OEM app (LG `Ims4`, QTI `ims.apk`) built against a framework API the
+new release deleted (`com.android.ims.*`, gone since P), the app must be made self-contained: rename the
+removed package to a private one and merge that package's classes into the app's own dex. Done on the
+Robin (QTI, A13) and the V20 (LG, A17). The pieces, in order:
+
+1. **Deodex the app and the legacy framework jar.** `oat-to-smali.sh` on the app's clean classes.dex;
+   `deodex-jar.sh <oat> <system.image|bootcp> <out>` on the framework jar(s) that hold the legacy API
+   (on the V20: `boot-ims-common.oat` has the concrete classes). deodex-jar resolves the quickened
+   opcodes against the stock boot classpath -- a plain `baksmali d --allow-odex-opcodes` leaves them in
+   and the smali then will not reassemble. It fails loudly if any quick opcode survives (partial deodex
+   installs fine and only breaks at runtime).
+2. **Regenerate the AIDL interfaces, do NOT deodex them.** The `I*$Stub/$Proxy` binder classes rarely
+   deodex cleanly (invoke-virtual-quick into Parcel by vtable index). `gen-legacy-aidl.py` rebuilds the
+   `.aidl` from the smali instead -- transaction order from the `$Stub`'s `TRANSACTION_` constants
+   (which survive quickening), signatures from the interface's abstract methods. Set `LEGACY_PKG` to the
+   private package. Then compile: `aidl` (aidl must sit at its package path; `-I` the tree's framework +
+   `telecomm/framework/aidl-export` for VideoProfile + `frameworks/native/aidl/gui` for Surface) ->
+   `javac` against `prebuilts/sdk/current/public/android.jar` -> **R8's D8** (`prebuilts/r8/r8.jar`
+   `com.android.tools.r8.D8`; the old `d8.jar` lacks `--min-api`) -> baksmali. Verify the regenerated
+   `$Stub` transaction codes match the stock ones byte-for-byte -- that is the binder-compatibility check.
+   The AIDL compile needs each referenced parcelable as a build-time stub `.java` (CREATOR +
+   writeToParcel) on the classpath.
+3. **Parcelables: stub for load, real for calls.** AOSP parcelables whose only quick op is
+   `return-void-no-barrier` are clean after one sed. The rest (OEM parcelables, UCE/RCS) can be minimal
+   `implements Parcelable` stubs for the *load* milestone (they are off the service-start path), made
+   real only when a call actually marshals them.
+4. **Rename + merge.** `merge-legacy-classes.py --app <smali> --legacy <clean-dirs> --old com/android/ims
+   --new <private/pkg> --out <merged>` renames every type descriptor and exact-match AIDL descriptor
+   string (not broadcast actions), merges the legacy closure in, and redirects the @hide specialized
+   `System.arraycopy` overloads to the public generic one (a 2016 app calling the specialized form dies
+   with IllegalAccessError at onCreate under hidden-API enforcement). Then `smali.jar assemble` ->
+   replace classes.dex -> strip META-INF -> ship via `android_app_import certificate:platform` (the OEM
+   `sharedUserId` must stay signed by the platform key).
+5. **Bitness.** The OEM SIP libs are 32-bit. An app with no bundled native libs launches 64-bit on a
+   zygote64_32 device and cannot load them. Bundle the 32-bit libs in the apk (`lib/armeabi-v7a/`,
+   `extractNativeLibs=true`) -- that forces the process 32-bit AND puts the libs in the app namespace's
+   own permitted path, so only the framework libs need public.libraries; see the load section above.
+6. **Then** the Binder/AIDL bridge (the compat ImsService), the ImsResolver config, sepolicy (author it;
+   expect runtime denials), and the modem reg path.
