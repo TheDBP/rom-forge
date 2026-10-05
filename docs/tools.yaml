@@ -233,7 +233,8 @@ tools:
     path: "tools/gen-verify-stubs.py"
     summary: "- emit minimal smali \"verify stubs\" for framework/vendor classes a ported app references but the target ROM lacks"
     usage: "gen-verify-stubs.py --app <app-smali-dir> --out <extra-smali-dir> CLASS [CLASS ...]"
-    docs: []
+    docs:
+      - "docs/debugging-volte.md"
   - name: "hybrid-bootimg.sh"
     path: "tools/hybrid-bootimg.sh"
     summary: "a boot image with one build's kernel+dtb and another's ramdisk"

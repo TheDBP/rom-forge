@@ -327,6 +327,13 @@ each with its own signature. Observed bringing LG's `Ims4` up on A17; the order 
    efficient path is the standard vendor-component bringup: make the domain permissive (its own seapp
    domain, or the shared one) for one reflash, let it run through surfacing every denial, `audit2allow`,
    then write real rules and lock down.
+6. **The app runs but a gate is stuck** ("APN is blocked; LTE only supports the emergency service"
+   forever, no exception anywhere): a verify stub changed the app's control flow. Stubs that stand in
+   for OEM *enums* return the same code from every constant, so `state.getCode() ==
+   EMERGENCY.getCode()` is always true and `fromInt(n) == CONST` never is. `gen-verify-stubs.py` warns
+   `!! enum-like` for this shape; for those classes copy the real names/ordinals/codes from the stock
+   deodex (`fromInt` must return the singletons -- callers compare by reference). Audit a stuck gate by
+   reading the condition's smali back to which stub it consults, before suspecting the platform.
 
 **Iterate dex/resource fixes without reflashing** with `push-system-app.sh` (a ~3-min loop vs a ~45-min
 rebuild+reflash). It handles the three traps: shared-uid signing (matches the device cert), and the
