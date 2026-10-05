@@ -319,7 +319,12 @@ each with its own signature. Observed bringing LG's `Ims4` up on A17; the order 
    from an installed platform app and match it (`push-system-app.sh` does this).
 4. **`NoSuchMethodError` on a framework class** (`SubscriptionManager.getSlotId` -> `getSlotIndex`):
    API drift -- the class survived, the method was renamed/removed. Redirect old->new in smali
-   (same signature) via a `method-redirects.txt`. Find these ahead of time with `app-fw-api-gap.py`.
+   via a `method-redirects.txt` applied by `apply-method-redirects.py`: a literal rename when the
+   method moved; `|static Lcompat;->m(Lrecv;...)` when it is GONE (`TelephonyManager.getPcscfAddress`
+   -> a compat static over `LinkProperties.getPcscfServers()`, receiver as arg 0, compiled against the
+   `system` stub jar for @SystemApi). Note the failure only surfaces when the path RUNS -- here on the
+   ConnectivityThread the first time the IMS PDN came up, so it hid behind the APN gate (6) for days.
+   Find these ahead of time with `app-fw-api-gap.py`.
 5. **`SecurityException`/property-set failure, then avc denials**: sepolicy. The app sets properties
    (`avc denied { set } property=... tclass=property_service`), opens sockets, reads files. It runs in
    whatever domain its uid maps to (android.uid.phone -> `radio`). **You usually cannot iterate this at

@@ -4,7 +4,7 @@
 or run it with `--check` to find out whether this file is stale. `propagate-forge.sh`
 does that automatically, so an engine change cannot ship with an index that lies.
 
-84 tools. Each row is `| name | what it does | usage | docs |` with a fixed column count
+85 tools. Each row is `| name | what it does | usage | docs |` with a fixed column count
 and any literal pipe escaped, so `awk -F'|'` is enough to parse it. `docs/tools.yaml`
 carries the same data for anything that would rather not parse Markdown.
 
@@ -12,6 +12,7 @@ carries the same data for anything that would rather not parse Markdown.
 |---|---|---|---|
 | [`abi-gap.sh`](../tools/abi-gap.sh) | list the symbols a prebuilt blob imports that the running platform no longer provides | `abi-gap.sh <blob> [-s SERIAL] [--keep DIR]` | [debugging-a-vendor-blob](debugging-a-vendor-blob.md), [debugging-volte](debugging-volte.md) |
 | [`app-fw-api-gap.py`](../tools/app-fw-api-gap.py) | - preflight a ported app against a target framework: | `app-fw-api-gap.py --app <app-smali-dir> --fw <framework.jar\|dir\|smali-dir>[,<more>...] [--pkg android,javax,...]` | [debugging-volte](debugging-volte.md) |
+| [`apply-method-redirects.py`](../tools/apply-method-redirects.py) | - rewrite framework-API-drift call sites in a smali tree from a rules file | `apply-method-redirects.py <redirects.txt> <smali-dir>` | — |
 | [`apply-overlay.sh`](../tools/apply-overlay.sh) | apply the composed customization stack onto a synced LineageOS tree: | `apply-overlay.sh` | — |
 | [`aps2-relocs.py`](../tools/aps2-relocs.py) | decode the Android-packed (APS2) dynamic relocations of a prebuilt ELF .so and print each one with its target symbol, because llvm-readelf/readelf cannot symbolise SHT_ANDROID_REL ("unable to read an entry | `aps2-relocs.py <lib.so> [HEXOFFSET ...]      # all relocs, or only those at the given file offsets` | [debugging-a-vendor-blob](debugging-a-vendor-blob.md) |
 | [`bench-launch.sh`](../tools/bench-launch.sh) | cold app-launch times over adb, for A/B-ing a runtime tuning on one phone | `bench-launch.sh` | — |
