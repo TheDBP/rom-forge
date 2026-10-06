@@ -21,7 +21,7 @@ import android.util.Log;
  * HAL log while the audio mode is already MODE_IN_CALL.
  *
  * Values come from the audio HAL, not from a public API: VOICEMMODE1_VSID and CALL_INACTIVE/ACTIVE
- * in hardware/qcom-caf/msm8996/audio/hal (voice_extn.c, voice.h). The modem confirms which session
+ * in hardware/qcom-caf/<soc>/audio/hal (voice_extn.c, voice.h). The modem confirms which session
  * it picked -- MMPF logs {@code setAudioCalInfoParam[vsid=...]} -- so check that matches if audio is
  * ever silent again after a modem or HAL change.
  */
