@@ -432,6 +432,32 @@ framework patch. `new-ims-bridge.sh` writes it from `templates/ims-bridge`; what
   module; its `VideoProfile.aidl` sits at `frameworks/base/telecomm/framework/aidl-export`, so that is
   an `aidl.include_dirs` entry next to `frameworks/base/core/java`); `android/view/Surface.aidl` is
   gone from core/java, the template ships its own parcelable declaration.
+- **The compat path needs a framework fix on 17 (and probably anything past 13).** Binding ANY compat
+  ImsService kills `com.android.phone` and it restart-loops:
+  `ImsProvisioningController` -> `ImsConfig#addConfigCallback` -> `ImsConfigImplBase$ImsConfigStub
+  .executeMethodAsync` -> NPE in `CompletableFuture.screenExecutor`. Every `*ImplBase` dispatches
+  binder calls through `runAsync(.., mExecutor)`; `ImsServiceControllerCompat.createMMTelCompat()`
+  builds the MmTel/registration/config adapters and calls `setDefaultExecutor()` on none of them, so
+  that executor is null -- and null there throws rather than falling back to the calling thread. The
+  modern path sets it in `ImsService#getConfig/getRegistration/createMmTelFeature`, which is why
+  nothing upstream notices: the compat path has been deprecated since P. Patch
+  `ImsServiceControllerCompat` to set it on all three adapters (the other two reach the same
+  `runAsync` and fail on the next call). Expect more rot in this path for the same reason.
+- **What actually gates an IMS dial** -- not the modem's VoPS flag:
+  `GsmCdmaPhone.useImsForCall()` -> `ImsPhone.isVoiceOverCellularImsEnabled()` ->
+  `ImsPhoneCallTracker.isImsCapabilityInCacheAvailable(CAPABILITY_TYPE_VOICE,
+  REGISTRATION_TECH_LTE)`. That cache is fed by the registration callbacks, i.e. the feature bitmap
+  the bridge publishes, so `vops=false` in the RIL does not stop an IMS call but a missing bitmap
+  does. Check `dumpsys telephony.registry` / `mMmTelCapabilities` before suspecting the modem.
+- **Push the bridge onto the running build instead of waiting for a flash.** The APK, the feature xml
+  and a `ro.` prop in build.prop all go in with one `/system` remount, and `cmd phone cc set-value -p
+  config_ims_mmtel_package_override_string <pkg>` points ImsResolver at it without rebuilding the
+  Telephony overlay (`cmd phone ims set-ims-service -d` does NOT stick -- the getter keeps reporting
+  the overlay). That turns a 75-minute build+flash per hypothesis into minutes; it is how the
+  executor NPE above was found. Clear the override (and remove the apk) before walking away -- a
+  persisted override pointing at a crashing service restart-loops the phone process, waking the
+  screen with a notification every few seconds. Note the override is stored per-ICCID under
+  `/data/user_de/0/com.android.phone/files/` and survives reboots.
 - **Verify**: `dumpsys telephony.registry` shows IMS registered; logcat tag `ImsBridge` for open()/
   replay/bitmap probe; an MT INVITE now rings the InCallUI instead of being CANCELled by the network
   with `480 CC_NOT_REACHABLE` ~18 s later (that CANCEL is the signature of "SIP works, nothing is
