@@ -452,6 +452,7 @@ tools:
     docs:
       - "docs/OEM-ASSETS.md"
       - "docs/RELEASING.md"
+      - "docs/debugging-volte.md"
   - name: "rename-import.py"
     path: "tools/rename-import.py"
     summary: "point ONE blob's import of a symbol at a differently-named replacement, by"
