@@ -475,7 +475,9 @@ modules/              on-device Magisk modules (linux-chroot)
 templates/            source templates instantiated into device trees by tools/ (ims-bridge: the compat
                       ImsService over an OEM legacy IMS app, see tools/new-ims-bridge.sh)
 prebuilt/             fetchers for Magisk, F-Droid, Firefox, Fulguris, K-9, KDE Connect, TermOne Plus,
-                      Nextcloud, Linphone, ConnectBot
+                      Nextcloud, Linphone, ConnectBot, OpenVPN, Syncthing-Fork
+patches/<branch>/     engine patches applied on every device on that branch
+docs/                 the worked methods (see Documentation below)
 GOTCHAS.md            known traps, indexed by symptom
 ```
 

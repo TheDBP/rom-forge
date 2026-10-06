@@ -18,8 +18,10 @@ produces one image; the preset just names which options that image gets.
 
 ```
 forge/options/<name>/
-    option.conf          name, description, COMPAT, and optionally KERNEL_CONFIGS / KERNEL_PATCHES
+    option.conf          NAME, DESC, and optionally NOTE, COMPAT, REQUIRES,
+                         KERNEL_CONFIGS / KERNEL_PATCHES / KERNEL_PATCHES_OPTIONAL
     patches/<branch>/    git am onto synced projects -- BRANCH-SCOPED, see below
+    local_manifests/<branch>/   extra repo projects this option needs synced
     fetch.sh             pull a prebuilt (APK, blob) at sync time
     assets.list          file copies and removals
     tree/                files staged verbatim into the AOSP tree
@@ -30,6 +32,19 @@ forge/options/<name>/
     post-build.sh        run after a successful build; non-zero fails it
     reference/           optional: source material, not shipped
 ```
+
+`option.conf` is **sourced by the shell**, so a backtick or a `$` in `DESC`/`NOTE` is substitution,
+not punctuation. Escape them (`\``); `gen-option-index.py` unescapes when it renders the table.
+
+- `DESC` — one line, what the option does. It is what the generated options tables print.
+- `NOTE` — an optional caveat appended to `DESC` everywhere it is rendered: that `bringup` accepts
+  adb from any host, that `fulguris` ships as the only browser. Device-specific caveats do not go
+  here — those belong in `options-notes.conf` in the device repo.
+- `REQUIRES` — another option to pull in. One pass, no recursion (see the end of this file).
+- `COMPAT` — `all` (the default when absent), or a comma-separated OR of `device=<vendor>/<codename>`,
+  `soc=<id>` and `branch=<lineage-XX.X>`. Any one match admits the option; no match and it is
+  skipped with a message rather than failing the build. Use it when the option can never apply —
+  not when it simply has no patch for a branch yet, which the forge already handles.
 
 Every part is optional. There is one mechanism, not two: what used to be a "feature" (patches
 applied at sync) and what used to be an "option" (a makefile fragment gated at build time) are parts
