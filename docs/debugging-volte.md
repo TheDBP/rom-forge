@@ -462,3 +462,46 @@ framework patch. `new-ims-bridge.sh` writes it from `templates/ims-bridge`; what
   replay/bitmap probe; an MT INVITE now rings the InCallUI instead of being CANCELled by the network
   with `480 CC_NOT_REACHABLE` ~18 s later (that CANCEL is the signature of "SIP works, nothing is
   listening above it").
+
+## The OEM media stack asks the MODEM for the RTP address (and what to do when that fails)
+
+Signalling working is not audio working. Past REGISTER and INVITE the next class of failure is the
+media layer, and an OEM stack may not look for the local RTP address where you expect: LG's asks the
+*modem* for the IMS PDN address over a private QMI tunnel, and logs the failure under a tag nobody is
+filtering on. The shape generalises to any OEM IMS media lib.
+
+- **Find the tags before chasing the bug.** A library linked into someone else's process contributes
+  its own logcat tag, so the app's tag shows you none of it. `blob-log-tags.py <lib.so>` resolves the
+  tag literal at each `__android_log_*` site. On the V20 the SIP core logged under the tag everyone
+  watched while the real cause sat under `MMPF` (libimsmmpf) and `QMI_FW` (libvss_ims_qcci) -- never
+  captured until the tags were known. Prefer the tags that log at E.
+- **The chain, for reference**: `AudioAdaptor::GetIPAddrOfCP` -> binder to the OEM's media service
+  (`getService("lgeims_mmpf")`) -> a private QMI service (LG: `0x2BF lge_ims`, msg `0x060C`, an
+  opaque `u8[300]` tunnel) -> the answer arrives as an *indication*, not in the response. The error
+  the SIP layer prints (`Error[21]`) is only a 1 s timeout waiting for that indication, and the QMI
+  send result is **discarded** -- a failed send and a silent modem look identical from above. Never
+  diagnose from the SIP-layer error code; get the transport's own log.
+- **Four outcomes, needing different fixes.** With the real tags captured:
+  `ERROR!!! ims handle is NULL` -> the QMI client never came up in that process (AP-side; suspect the
+  IPC-router/qmuxd socket under sepolicy). `Error sending TXN` / `xport_send: Sendto failed` -> the
+  client is alive but the message never left the AP (AP-side transport). Request sent, no indication
+  -> the modem is silent; check what it is being asked about before blaming it. Indication received
+  but the address unused -> a gate upstream rejected it.
+- **Check what the modem is being asked about.** LG logs
+  `UpdateModemIPv6() - PDP profile : %d, Socket Pos : %d`. A profile of `-1` means the AP never
+  learned the IMS PDN profile number -- the OEM stack expects the OEM RIL to supply it, so on a port
+  running a stock/AOSP RIL this is an AP-side config gap, not a modem fault.
+- **Before assuming silence means no audio, look for a fallback.** LG's `AudioProfileConfigurer`
+  falls back to the stack's normal local-address accessor when the modem address is empty, and that
+  is what `MakeSDPFromProfile` puts in `c=`/`o=`. So first confirm an AP-side IMS PDN address exists:
+  `dumpsys telephony.registry` for the `ims` APN's `InterfaceName` / `LinkAddresses` (on the V20 it
+  is CONNECTED on its own `rmnet_data*` with a global address and the P-CSCF list). If it does, the
+  modem query failing is probably not what breaks audio -- look at the RTP socket bind instead.
+- **Gates are properties worth finding.** LG's `UpdateModemIPv6` has eight logged gates; one is
+  `IsUseSingleIP()` = `persist.lg.data.iwlan.ipsec.ap`, whose only caller is that function. Setting
+  it skips the doomed query and reaches the fallback at once -- on the V20 the failed query retried
+  four times and added ~3.3 s to call setup. That removes a delay; it is not a fix for audio.
+- **A service the OEM app publishes needs a `service_contexts` entry before sepolicy is locked down.**
+  `avc denied { add } name=<oem_service>` under a permissive domain *succeeds*, so media works during
+  bringup and dies the moment that domain is enforcing. Note `service list` from `adb shell` can
+  itself be denied `find` on it -- that is the check lying, not the service missing.
