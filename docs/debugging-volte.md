@@ -72,6 +72,33 @@ Do not chase these until registration succeeds — they clear on their own when 
 Note also that `sys.ims.*` is typed `qcom_ims_prop` and is unreadable from a shell, so an empty
 `getprop` is not evidence that it is unset.
 
+## A pre-answer hangup is not a "start failure", and 17 will not unwind it for you
+
+A 7.0-era OEM stack reports the remote hanging up on a call that was never answered as
+`callSessionStartFailed` — in its model the session never started. Forward that verbatim and an
+unanswered incoming call rings until the handset is rebooted.
+
+`ImsPhoneCallTracker.onCallStartFailed` unwinds `mPendingMO` and nothing else (plus a `findConnection`
+branch gated on `DomainSelectionResolver.isDomainSelectionSupported()`, off on devices this old).
+`mPendingMO` is null for an incoming call, so the handler runs to completion having disconnected
+nothing. Telecom's `CallAnomalyWatchdog` notices after two minutes and logs "caught and disconnected
+a stuck/zombie call" — and the call survives that too, as it survives `KEYCODE_ENDCALL`, because
+there is no live session underneath for a hangup to act on. Meanwhile Telecom refuses to dial
+("Cannot place a call as there is an unanswered incoming call"), so the symptom people report is
+broken outgoing calls.
+
+- The one-line signature: `ImsPhoneCallTracker: onCallStartFailed reasonCode=510`
+  (`CODE_USER_TERMINATED_BY_REMOTE`) on a call that is *ringing* rather than dialling. A correct
+  teardown reads `onCallTerminated`. The OEM layer usually logs the truth immediately above it.
+- The fix is in the bridge, not the framework: deliver MT sessions as `callSessionTerminated` and
+  leave MO on `callSessionStartFailed`, which is what drives the CSFB retry path. `templates/
+  ims-bridge` carries it — `CallSessionWrapper` takes an `incoming` flag, set only on the
+  `getPendingCallSession` path, since that is the only way an MT session arrives.
+
+Generalises past this callback: when an OEM stack's vocabulary predates the modern stack's, check
+what the modern handler *does* with each callback, not just that a callback of that name exists.
+A faithful forward of a term whose meaning has narrowed is a silent no-op.
+
 ## Wi-Fi calling: find out what the modem is being told, not what the framework thinks
 
 VoWiFi fails differently from VoLTE. The framework side can be completely healthy --
