@@ -394,3 +394,24 @@ Two more traps in the same restage:
   extracting the wrong one gives `is 32-bit instead of 64-bit` at link time. Match the daemon:
   `file -b` on both before pushing.
 
+## 38. One `allowxperm` turns that whole domain/class into a whitelist
+
+`allow <domain> <target>:<class> ioctl;` permits every ioctl. Add a single
+`allowxperm <domain> <target>:<class> ioctl { 0xNNNN };` and the kernel switches that
+domain/class pair to whitelist mode: the one command you named is allowed and **every other ioctl
+is now denied**. Tightening one call therefore silently removes all the others.
+
+Seen on the V20 moving the IMS stack off `permissive radio`. The permissive audit showed
+`ioctlcmd=c304` on the QMI socket, so the rule named `0xc304` -- and the first enforcing boot denied
+`0xc302`, which the same QMI path also uses. The symptom was not an obvious failure: calls still
+connected, registration still worked, and audio was silent, because the denied ioctl broke the query
+that sets up the modem's voice session. Fixed by allowing the whole `0xc300-0xc30f` IPC-router
+family.
+
+Two lessons that generalise:
+- When you must add an xperm rule, allow the **family** the driver uses, not the one command you
+  happened to observe. A permissive-boot audit can only log the ioctls that were actually issued in
+  that run, so the list is a lower bound, never the set.
+- A permissive audit cannot reveal this class of bug at all: whitelist mode does not exist until
+  your rule does. Budget one enforcing boot to find what the audit structurally could not.
+

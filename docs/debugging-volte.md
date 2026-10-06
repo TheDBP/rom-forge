@@ -590,3 +590,26 @@ agreement, a WMS proxy for SMS over IMS). You can prove or disprove one in minut
 What this cannot test is the sepolicy domain the real patch needs, so treat a success here as
 "the chain works", not "it is ready to ship".
 
+## Locking an OEM IMS stack down from `permissive`
+
+Bringing the OEM app up means running its domain permissive; shipping means removing that. The
+denial set from a permissive boot gets you most of the way, with two traps.
+
+- **Audit from a boot that did everything**, not just one that registered. The services the stack
+  publishes lazily (the media service that creates the modem's voice session) only appear once a
+  call has been made, and that service failing to publish is exactly the kind of denial that costs
+  audio while leaving calls connecting normally.
+- **Expect one enforcing boot to find more.** A permissive audit logs what *would* have been denied
+  given the current policy, so it cannot show anything your new rules themselves introduce --
+  notably ioctl whitelisting (GOTCHAS 38), which does not exist until you add an `allowxperm`. On
+  the V20 the first enforcing boot surfaced a second QMI ioctl and a third service
+  (`com.lge.ims.rcs.media`) the permissive run never recorded.
+- Services the OEM app registers need `service_contexts` entries plus `add`/`find` for its domain,
+  or they land on `default_android_service` where the domain may not touch them.
+- Its own properties usually need a type: a coredomain may only set a `system_property_type`, so
+  declare them `system_internal_prop` rather than leaving them as `system_prop`/`default_prop`.
+- The QMI socket family has no class in policy and lands on the generic `socket` class.
+
+Verify with `logcat | grep "avc.*denied.*radio" | grep permissive=0` on an enforcing boot, and
+re-check after any change to the stack -- an empty list there is the only evidence that matters.
+
