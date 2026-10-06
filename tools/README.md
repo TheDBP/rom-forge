@@ -111,7 +111,7 @@ Bringing a kernel up to a newer branch (the *kernel gate* of a port — see
 | `kmod-rebase-crcs.py` | when insmod says "disagrees about version of symbol" | the module's `__versions` CRCs rewritten from the target kernel's Image, so a module from your tree loads on an official nightly built with another toolchain |
 | `pmsg-decode.py` | when a boot never reached adb | the previous boot's logcat out of a pstore pmsg record, tombstones included |
 | `gen-option-index.py` | after adding an option, or changing a DESC/NOTE | the options table in any README carrying `<!-- options:start -->` markers, rendered from `forge/options/` on disk; `--check` fails if one is stale. `device` in the marker filters to that repo's branch and merges its `options-notes.conf` |
-| `gen-tool-index.py` | after adding a tool or a doc | `docs/TOOLS.md` and `docs/tools.yaml` regenerated; `--check` fails if either is stale or a tool is missing from this table |
+| `gen-tool-index.py` | after adding a tool or a doc | `docs/TOOLS.md` and `docs/tools.yaml` regenerated; `--check` fails if either is stale, if a tool is missing from this table, or if any script in the repo has a shebang and no exec bit (sourced libraries exempt themselves by saying so in their header) |
 
 ## Assessing a port
 
