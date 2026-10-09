@@ -594,9 +594,12 @@ One escape hatch exists and is worth checking before relying on any of this: an 
 `android.app.PROPERTY_LEGACY_UPDATE_OWNERSHIP_DENYLIST` manifest property. Dump the Play Store APK's
 manifest and look. The build bundled here declares no such property.
 
-XML comments may not contain `--`, which is easy to trip over when the house style uses it in prose;
-apply-overlay.sh parses every XML under an option's tree/, so a malformed file fails the overlay
-rather than the build.
+XML comments may not contain `--`, which is easy to trip over when the house style uses it in prose.
+Two places catch it and neither covers the other: `apply-overlay.sh` parses every XML under an
+option's `tree/`, so a malformed file there fails the overlay rather than the build, and
+`check-patch-series.sh` rejects a `--` in an XML comment added by a patch. Anything else, including
+a device overlay edited in place, is caught only by aapt2 twelve minutes into the build. The habit
+is the actual fix: do not write `--` in prose at all.
 
 ## 44. A persistent app does not exist until the user unlocks
 
