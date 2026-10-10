@@ -17,7 +17,7 @@
 #      cert (from an installed platform app) and finds the matching key among the candidates, instead
 #      of guessing.
 #   2. UNCOMPRESSED JNI. android_app_import stores a system app's embedded .so uncompressed+aligned;
-#      harmless to keep compressed for extractNativeLibs=true apps, but we zipalign -p either way.
+#      harmless to keep compressed for extractNativeLibs=true apps, but zipalign -p is applied either way.
 #   3. THE FLAKY /system REMOUNT. On a block (non-overlay, dm-verity-less-but-RO) system-as-root, only
 #      the FIRST `mount -o rw,remount /` after a clean boot persists; later ones report "not user
 #      mountable in fstab" and adb push lands in a view that reverts on reboot. So: adb push to /data,
@@ -61,7 +61,7 @@ if [ -n "$DEVFP" ]; then
   [ -n "$KEY" ] || { echo "!! no candidate key matches the device platform cert ($DEVFP); set KEYS_DIR" >&2; exit 1; }
   echo ">> signing with $(basename "$KEY") (matches device platform cert)"
 else
-  # Could not read the device cert (device unstable, or the ref app is itself the one we're replacing
+  # Could not read the device cert (device unstable, or the ref app is itself the one being replaced
   # and is unsigned mid-iteration). Fall back to build/make's default platform key -- the usual signer
   # for a bringup -- rather than bail. Set KEYS_DIR / edit CANDS if your build uses a custom platform key.
   KEY="$S/build/make/target/product/security/platform"

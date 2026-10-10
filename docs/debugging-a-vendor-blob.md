@@ -19,14 +19,14 @@ thirty seconds and it either hands you the answer or rules out a whole class of 
        _ZN7android7SurfaceC1ERKNS_2spINS_22IGraphicBufferProducerEEEb
            android::Surface::Surface(android::sp<android::IGraphicBufferProducer> const&, bool)
 
-Three things it taught us on ether that generalise:
+Three findings from ether that generalise:
 
 - **A blob that looks fatal may not be in the path you care about.** `lib-imsvt.so` had 61
   unresolved symbols, which reads as hopeless -- but nothing links it and it is dlopened only on a
-  code path we did not need. The library that actually gated startup needed one symbol. Check what
+  code path this port does not need. The library that actually gated startup needed one symbol. Check what
   is in the load path before costing the work.
 - **Separate "removed subsystem" from "moved library".** Of those 61, most were `Rcc*` symbols from
-  a vendor library we had simply forgotten to extract. The remainder were `IOMXObserver` and
+  a vendor library that had simply not been extracted. The remainder were `IOMXObserver` and
   `IGraphicBufferAlloc` -- platform APIs deleted outright. The first is a one-line fix, the second
   is unfixable, and the counts alone do not distinguish them.
 - **An empty report does not mean the blob works.** See the script header: nanopb kept every symbol

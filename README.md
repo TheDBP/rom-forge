@@ -105,8 +105,8 @@ theming, apps or behaviour changes.
 PRESET=stock ./forge/bootstrap.sh          # tag: stock
 ```
 
-It is the only preset that takes neither `COMMON_OPTIONS` nor `EXTRA_OPTIONS` — "stock plus the
-dozen things we always add" would not be stock, and a stock image quietly carrying `oem` art would
+It is the only preset that takes neither `COMMON_OPTIONS` nor `EXTRA_OPTIONS` — stock plus a
+dozen routine additions would not be stock, and a stock image quietly carrying `oem` art would
 be a lie in its own filename. Asking for it with `EXTRA_OPTIONS` set prints a note saying it was
 ignored.
 
@@ -114,14 +114,14 @@ Two things do reach it, and both are the device saying "this is not an extra, it
 working at all". `STOCK_OPTIONS` in `device.conf` names options stock still gets — without
 `setup-mobile-data` on the Robin, SetupWizard leaves mobile data off, and an image that cannot
 reach the network does not answer the question stock exists to answer. And on a device that builds
-VoLTE from stock firmware, `volte` turns itself on here as everywhere else. So "is this bug ours or
-upstream's?" is answered against upstream *plus those*. If you suspect one of them, empty
+VoLTE from stock firmware, `volte` turns itself on here as everywhere else. So the local-or-upstream question is
+answered against upstream *plus those*. If you suspect one of them, empty
 `STOCK_OPTIONS` for the run, or move the stock firmware aside so `volte` reports itself off. An
 empty `OPTIONS=` will not do it: with no `PRESET` either, bootstrap falls back to the first preset
 rather than to nothing.
 
-Its value is answering one question quickly: **is this ours or upstream's?** A bug that reproduces
-on a stock build is LineageOS's; one that disappears is something we added, and the option list is
+Its value is answering one question quickly: **is this local or upstream?** A bug that reproduces
+on a stock build is LineageOS's; one that disappears originates here, and the option list is
 then the search space. That is a single flash instead of an argument.
 
 Declare your own `stock` row in `PRESETS` and it wins over the built-in one.

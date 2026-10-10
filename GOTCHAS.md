@@ -214,7 +214,7 @@ then failed with `unrecognized property "preprocessed"`.
 
 - Do check the property is in the exported struct, or just try it in a throwaway build.
 - Don't count symbols and call it verification. The same mistake reads "8 `ic_sysbar_*` resources in
-  SystemUI.apk" as "our icons won", when stock ships those same three names.
+  SystemUI.apk" as a win for the replacement icons, when stock ships those same three names.
 
 ## 27. An RRO on a resource the target does not declare overlayable is silently dropped
 Apps that ship `res/values/overlayable.xml` only let overlays touch the listed resources; anything
@@ -461,7 +461,7 @@ What makes this expensive is that every downstream symptom is an *absence*:
 
 That reads exactly like a permission or transport problem, and it is neither. On the V20 it cost
 four wrong theories — missing `qmuxd`, a hardcoded `rmnet0` port name, the `sec_config` GID rule
-for that service, and "our RIL owns the transport" — each of which explains silence just as well.
+for that service, and the device RIL owning the transport — each of which explains silence just as well.
 
 - Do run `tools/android-cc.sh tools/native-probes/qmi-idl-probe.c --push` and scan. It prints the
   `(major, minor, tool)` the ROM's `libqmiservices.so` will accept, with the OEM binary out of the
