@@ -96,7 +96,7 @@ fi
 [ -f "$DEVICE_REPO/device.conf" ] || { echo "!! no device.conf at $DEVICE_REPO — copy forge/device.conf.example"; exit 1; }
 source "$DEVICE_REPO/device.conf"
 # Personal, per-checkout settings. Gitignored, so it never reaches the published repo: this is where
-# "every build I make also wants the reclaimed OEM assets" belongs, as EXTRA_OPTIONS="oem". Sourced
+# "every build on this checkout also wants the reclaimed OEM assets" belongs, as EXTRA_OPTIONS="oem". Sourced
 # after device.conf so it can override anything there, and applies to whichever preset you build
 # rather than needing an -oem twin of each one. Anything it adds is reflected in the build tag.
 [ -f "$DEVICE_REPO/device.conf.local" ] && source "$DEVICE_REPO/device.conf.local"
