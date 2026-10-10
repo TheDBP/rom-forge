@@ -167,7 +167,7 @@ So a property test costs a build and a flash. That is ~35 minutes against a wedg
 reboot, and the reboot does not even give you the measurement.
 
 Two things make that bearable. Get a REPRODUCIBLE TRIGGER from whoever is holding the device before
-spending a build -- "it happens when I apply a colour scheme" turns a soak into a single action, and
+spending a build -- "it happens when a colour scheme is applied" turns a soak into a single action, and
 it is the difference between one build answering the question and five not answering it. And check
 the error counter as well as the symptom: a fix that stops the visible failure while the underlying
 error still climbs in `dmesg` is a fix that has hidden the bug rather than removed it.

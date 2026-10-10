@@ -6,8 +6,8 @@ Docker — the host needs only Docker, git and disk. No JDK, no Python, no repo 
 **Setting up a phone? Start with the template instead**, which has this vendored and a guided setup:
 
 ```sh
-git clone https://github.com/TheDBP/rom-forge-device-template.git my-phone
-cd my-phone && ./start-here.sh
+git clone https://github.com/TheDBP/rom-forge-device-template.git phone-repo
+cd phone-repo && ./start-here.sh
 ```
 
 This repo is the engine itself — read it when you want to know how the build works, change what it
@@ -17,7 +17,7 @@ does, or update `forge/` inside an existing device repo.
 
 ## What people use this for
 
-| I want to… | Do this |
+| Goal | Do this |
 |---|---|
 | Set up a new phone from scratch | Clone the [device template](https://github.com/TheDBP/rom-forge-device-template) and run `./start-here.sh`. |
 | Build one **without** Google apps, to share | `PRESET=clean ./bootstrap.sh` |
@@ -56,8 +56,8 @@ This assumes you have never built Android before. Follow it in order.
 ### 2. Get a device repo
 
 ```sh
-git clone https://github.com/TheDBP/rom-forge-device-template.git my-phone
-cd my-phone
+git clone https://github.com/TheDBP/rom-forge-device-template.git phone-repo
+cd phone-repo
 ./start-here.sh
 ```
 
@@ -175,7 +175,7 @@ Everything the forge changes is a patch. To add your own, edit the source direct
 ```sh
 cd build_output/src/device/<vendor>/<codename>
 # edit files
-git commit -am "my change"
+git commit -am "describe the change"
 ```
 
 Then rebuild. Your commit is already in the tree, so the next build picks it up.
@@ -240,8 +240,8 @@ holding that phone's config and patches, with `forge/` vendored inside it.
 setup script:
 
 ```sh
-git clone https://github.com/TheDBP/rom-forge-device-template.git my-phone
-cd my-phone
+git clone https://github.com/TheDBP/rom-forge-device-template.git phone-repo
+cd phone-repo
 ./start-here.sh
 ```
 
@@ -525,7 +525,7 @@ it.
 
 The difference is what it does not try to do: customization happens through
 `local_manifests/*.xml`, so the ROM is whatever your manifests point at. There is no layer for
-"apply this change to all my phones".
+"apply this change to every phone".
 
 **[hashbang/aosp-build](https://github.com/hashbang/aosp-build)** is closer in shape to this
 project, and the more interesting comparison. It also runs entirely in Docker, also keeps patches
