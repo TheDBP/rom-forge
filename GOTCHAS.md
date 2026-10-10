@@ -706,8 +706,14 @@ And repo remembers the override in its own config, while `bootstrap.sh` only run
 upstream while reporting nothing unusual. Clear it with `repo init -m default.xml` when no
 `PIN_MANIFEST` is given.
 
-Verifying that a snapshot *writes* is not verifying that it *restores*. Test the replay path, or the
-feature is decoration.
+There is a third place it bites, and it is not at sync time. The ROM build runs
+`repo manifest -o - -r` itself to write `/product/etc/build-manifest.xml`, so a duplicate kills that
+target around 50% into the build, long after sync looked fine. `apply-overlay` reinstalls the local
+manifests on its second pass, which undoes anything the pin did earlier, so the removal has to be
+repeated immediately before the build.
+
+Verifying that a snapshot *writes* is not verifying that it *restores*. Test the replay path end to
+end, including a build, or the feature is decoration.
 
 Note the asymmetry when you have no snapshot to pin, because it determines what you may conclude.
 Checking an older patch series out onto today's upstream tests that series against a tree it has
