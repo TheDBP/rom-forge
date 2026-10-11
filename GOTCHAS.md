@@ -901,3 +901,24 @@ Supporting signals that cost nothing to check first: whether the platform declar
 all (upstream LineageOS declared no notification LED for this device), and whether the vendor's own
 grouping device registered (LG's `rgb_blink` needs an `rgb` sync class device that never appears).
 When those disagree with a sysfs node, believe them over the node.
+
+## 56. PRODUCT_ENFORCE_RRO_TARGETS silently drops overlays that cannot be turned into an RRO
+
+A device tree that sets `PRODUCT_ENFORCE_RRO_TARGETS := *` converts every
+`DEVICE_PACKAGE_OVERLAYS` entry into an auto-generated runtime resource overlay, except paths
+listed in `PRODUCT_ENFORCE_RRO_EXCLUDED_OVERLAYS`. Resource packages that get no auto-generated
+RRO, such as lineage-sdk's `org.lineageos.platform-res`, end up with neither: the overlay is not
+baked in, no RRO is produced, and the build says nothing. Every value in it is lost.
+
+This is invisible in review because the overlay file looks right and sits in the expected place. One
+tree had three settings dropped this way for its whole life, including a notch flag and a
+fingerprint cleanup flag.
+
+Verify an overlay landed rather than assuming, by dumping the compiled resource out of the target
+package and comparing it to the overlay:
+
+    aapt2 dump resources out/target/product/<dev>/system/framework/<res>.apk | grep -A2 <resource>
+
+Use the tree's own `out/host/linux-x86/bin/aapt2`; an older aapt2 misreads newer APKs (GOTCHAS 49).
+A mismatch means the overlay never applied. Exclude its path from RRO enforcement, and expect every
+value in that file to start taking effect at once when you do.
