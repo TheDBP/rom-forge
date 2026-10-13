@@ -1000,8 +1000,13 @@ one. Seeding the property with the value the fallback would pick, and clearing t
 reproduces it while keeping adb, which a real wipe takes away:
 
     adb shell pm clear <consumer>
-    adb shell setprop <the persist property> <fallback value>
+    adb shell 'setprop <the persist property> ""'
     adb reboot
+
+Set it EMPTY rather than to the value the fallback would pick. A `persist.` property set to an empty
+string stays empty across the reboot, which is what a wipe leaves. Seeding the fallback value
+reproduces the symptom but not the precondition, so any fix that keys on "there was no previous
+value" will never fire and the test passes for the wrong reason.
 
 Three things that look like fixes and are not, all tested:
 
