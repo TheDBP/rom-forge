@@ -4,7 +4,7 @@
 or run it with `--check` to find out whether this file is stale. `propagate-forge.sh`
 does that automatically, so an engine change cannot ship with an index that lies.
 
-96 tools. Each row is `| name | what it does | usage | docs |` with a fixed column count
+97 tools. Each row is `| name | what it does | usage | docs |` with a fixed column count
 and any literal pipe escaped, so `awk -F'|'` is enough to parse it. `docs/tools.yaml`
 carries the same data for anything that would rather not parse Markdown.
 
@@ -24,6 +24,7 @@ carries the same data for anything that would rather not parse Markdown.
 | [`blob-log-tags.py`](../tools/blob-log-tags.py) | find which logcat tags a prebuilt .so logs under, by resolving the tag literal | `blob-log-tags.py <lib.so> [--objdump PATH] [--window N] [-v]` | [debugging-volte](debugging-volte.md) |
 | [`boot-console-wrap.sh`](../tools/boot-console-wrap.sh) | a boot image that gets the kernel console out of a boot loop or a hang, on a device whose bootloader gives you no serial, no ramoops across its resets, and no `fastboot boot` | `boot-console-wrap.sh build <boot.img> <recovery.img> <out.img> [--timeout 150] [--every 10] [--misc-offset-mib 16]` | [debugging-a-boot-loop](debugging-a-boot-loop.md) |
 | [`boot-window-logcat.sh`](../tools/boot-window-logcat.sh) | catch the logcat of a boot that ends in a reboot, through the seconds adbd is reachable | `boot-window-logcat.sh <outdir> [-s SERIAL] [--timeout SECONDS]        default timeout 900` | — |
+| [`build-queue.sh`](../tools/build-queue.sh) | run several builds back to back, one at a time, unattended | `./forge/tools/build-queue.sh <queue-file>` | — |
 | [`check-bpf-objects.py`](../tools/check-bpf-objects.py) | which BPF programs and maps of a built Android tree this kernel cannot load | `check-bpf-objects.py --kernel <old uapi bpf.h> --kver 4.9.337 [--api 3700] [--modern <new bpf.h>] [--available-events <file>] <objects...>` | [debugging-a-boot-loop](debugging-a-boot-loop.md), [porting-a-branch-bump](porting-a-branch-bump.md) |
 | [`check-bpf-readiness.sh`](../tools/check-bpf-readiness.sh) | find what a kernel without eBPF (or other modern syscalls) will break, before you spend a build-flash-boot cycle finding out | `check-bpf-readiness.sh --src <ANDROID_ROOT> \| --log <file>` | — |
 | [`check-dt-needed.py`](../tools/check-dt-needed.py) | every ELF in a built image whose DT_NEEDED libraries are not in the image | `check-dt-needed.py <out>/target/product/<device> [--partition system\|vendor\|all] [--quiet]` | [debugging-a-boot-loop](debugging-a-boot-loop.md) |
