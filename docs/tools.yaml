@@ -288,7 +288,8 @@ tools:
     path: "tools/ims-call-test.sh"
     summary: "place an outgoing call on a VoLTE port and report how it ended, so a call that never ends is a test failure instead of something noticed by hand"
     usage: "./forge/tools/ims-call-test.sh cancel [--number N] [--log F]   # end it once it reaches ALERTING"
-    docs: []
+    docs:
+      - "docs/debugging-volte.md"
   - name: "init-harness.sh"
     path: "tools/init-harness.sh"
     summary: "run a new ramdisk's /init on the live kernel, from recovery, without a boot"
