@@ -20,6 +20,9 @@ import com.android.ims.internal.IImsRegistrationListener;
 
 import @LEGACY_PKG@.internal.IImsService;
 
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -56,6 +59,17 @@ public class LegacyMMTelFeature extends MMTelFeature {
     private int mServiceId = INVALID_SERVICE_ID;
     private final RegistrationListenerAdapter mRegistration = new RegistrationListenerAdapter();
     private final AtomicBoolean mAwaiting = new AtomicBoolean();
+
+    /**
+     * How often the capability state is re-checked while a session is open. Every trigger @OEM_APP@
+     * offers can be missed: it reports a feature bitmap only on a UC state change, and a change
+     * that happens while nothing is listening, or that it simply does not emit, leaves the
+     * framework's view wrong with no event to correct it. A minute is far below the interval over
+     * which this has been seen to matter (hours) and costs two field reads per tick once voice is
+     * advertised, since the reconciler returns immediately in the healthy case.
+     */
+    private static final long RECONCILE_INTERVAL_MS = 60_000L;
+    private ScheduledExecutorService mReconciler;
 
     LegacyMMTelFeature(int slotId) {
         mSlotId = slotId;
@@ -178,8 +192,9 @@ public class LegacyMMTelFeature extends MMTelFeature {
             // registered: it registers tens of seconds after the framework opens the session, and
             // it only emits a feature bitmap on a UC state change, so the open()-time probe alone
             // always runs while registration is still disconnected and gives up.
-            mRegistration.setOnConnected(this::probeFeatureBitmapIfMissing);
-            probeFeatureBitmapIfMissing();
+            mRegistration.setOnRegistrationEvent(this::reconcileFeatureBitmap);
+            reconcileFeatureBitmap();
+            startCapabilityReconciler();
             return mServiceId;
         } catch (RemoteException e) {
             failed("startSession", e);
@@ -194,15 +209,29 @@ public class LegacyMMTelFeature extends MMTelFeature {
      * disabled" forever and every call would fall back to CS. Reconstruct the bitmap from
      * isConnected(), which reads the same UC state the bitmap is derived from: callType 2 = voice
      * over LTE, 4 = video. (Legacy 6-slot convention: slot i holds feature i or -1.)
+     *
+     * Re-derived rather than done once. An earlier version skipped this whenever a bitmap had
+     * already been recorded, so a bitmap saying voice was unavailable latched for the life of the
+     * process: observed on hardware after 20 hours of uptime as net.ims.reg=1 with the framework
+     * reporting useImsForCall=false, every call including voicemail silently falling back to CS,
+     * and nothing logging an error. Only a framework restart cleared it.
+     *
+     * Upgrade-only, deliberately. It acts when the stack is registered and the framework has not
+     * been told voice is available, and never the other way: a transient UC read of "not
+     * connected" must not pull VoLTE out from under a live call, and genuine deregistration
+     * arrives on registrationDisconnected, which the framework already handles.
      */
-    private void probeFeatureBitmapIfMissing() {
-        if (!mRegistration.isConnected() || mRegistration.hasFeatureBitmap()) {
-            Log.i(TAG, "slot " + mSlotId + ": bitmap probe skipped (connected="
-                    + mRegistration.isConnected() + " haveBitmap="
-                    + mRegistration.hasFeatureBitmap() + ")");
+    private void reconcileFeatureBitmap() {
+        if (!mRegistration.isConnected()) {
             return;
         }
-        IImsService s = legacyOrDown("probeFeatureBitmap");
+        if (mRegistration.advertisesVoice()) {
+            return;
+        }
+        Log.i(TAG, "slot " + mSlotId + ": registered but the framework has no voice capability"
+                + (mRegistration.hasFeatureBitmap() ? " (stale bitmap)" : " (no bitmap yet)")
+                + "; re-deriving from the UC state");
+        IImsService s = legacyOrDown("reconcileFeatureBitmap");
         if (s == null) {
             return;
         }
@@ -233,12 +262,20 @@ public class LegacyMMTelFeature extends MMTelFeature {
             disabled[3] = 3;
             disabled[4] = 4;                       // UT goes over the Ut interface, not a feature
             disabled[5] = 5;
-            Log.i(TAG, "slot " + mSlotId + ": synthesizing feature bitmap; registered="
+            // Upgrade-only, enforced here and not just at the gate above: the UC state can read
+            // differently between the two, and sending a no-voice bitmap would both strand the
+            // framework and leave advertisesVoice() false, so the next event would send it again.
+            if (!voice) {
+                Log.i(TAG, "slot " + mSlotId + ": UC state no longer reports voice; leaving the"
+                        + " framework's view alone, deregistration has its own callback");
+                return;
+            }
+            Log.i(TAG, "slot " + mSlotId + ": publishing feature bitmap; registered="
                     + registered + " voice=" + voice + " video=" + video);
             mRegistration.registrationFeatureCapabilityChanged(SERVICE_CLASS_MMTEL, enabled,
                     disabled);
         } catch (RemoteException e) {
-            Log.w(TAG, "feature bitmap probe failed", e);
+            Log.w(TAG, "feature bitmap re-derivation failed", e);
         }
     }
 
@@ -252,9 +289,41 @@ public class LegacyMMTelFeature extends MMTelFeature {
         } catch (RemoteException e) {
             Log.e(TAG, "endSession failed", e);
         } finally {
+            stopCapabilityReconciler();
             mServiceId = INVALID_SERVICE_ID;
             setFeatureState(ImsFeature.STATE_NOT_AVAILABLE);
         }
+    }
+
+    private synchronized void startCapabilityReconciler() {
+        if (mReconciler != null) {
+            return;
+        }
+        mReconciler = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "ImsBridgeCapReconcile");
+            t.setDaemon(true);
+            return t;
+        });
+        // The tick swallows everything it can throw. scheduleWithFixedDelay cancels the task on an
+        // uncaught exception and says nothing, which would turn the safety net into a single
+        // silent attempt -- the same shape of bug this exists to catch.
+        mReconciler.scheduleWithFixedDelay(() -> {
+            try {
+                reconcileFeatureBitmap();
+            } catch (Throwable t) {
+                Log.w(TAG, "capability reconcile tick failed", t);
+            }
+        }, RECONCILE_INTERVAL_MS, RECONCILE_INTERVAL_MS, TimeUnit.MILLISECONDS);
+        Log.i(TAG, "slot " + mSlotId + ": capability reconciler running every "
+                + (RECONCILE_INTERVAL_MS / 1000) + "s while the session is open");
+    }
+
+    private synchronized void stopCapabilityReconciler() {
+        if (mReconciler == null) {
+            return;
+        }
+        mReconciler.shutdownNow();
+        mReconciler = null;
     }
 
     @Override

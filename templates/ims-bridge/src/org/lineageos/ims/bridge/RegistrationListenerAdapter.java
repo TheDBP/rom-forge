@@ -48,9 +48,17 @@ class RegistrationListenerAdapter extends IImsRegistrationListener.Stub {
      * registers tens of seconds after the framework opens the session, so a probe done once at
      * open() time always runs too early and leaves the framework with an empty capability set.
      */
-    private Runnable mOnConnected;
+    private Runnable mOnRegistrationEvent;
 
-    void setOnConnected(Runnable r) { mOnConnected = r; }
+    void setOnRegistrationEvent(Runnable r) { mOnRegistrationEvent = r; }
+
+    /**
+     * Whether the bitmap last handed to the framework actually advertises voice over LTE. Slot 0
+     * holds FEATURE_TYPE_VOICE_OVER_LTE and the value must equal the index to count as enabled.
+     */
+    synchronized boolean advertisesVoice() {
+        return mEnabledFeatures != null && mEnabledFeatures.length > 0 && mEnabledFeatures[0] == 0;
+    }
 
     void add(com.android.ims.internal.IImsRegistrationListener target) {
         if (target == null || mTargets.contains(target)) return;
@@ -139,7 +147,7 @@ class RegistrationListenerAdapter extends IImsRegistrationListener.Stub {
                 + RIL_RADIO_TECHNOLOGY_LTE + "=LTE) -> " + mTargets.size() + " listener(s)");
         fanOut("registrationConnectedWithRadioTech",
                 t -> t.registrationConnectedWithRadioTech(imsRadioTech));
-        Runnable r = mOnConnected;
+        Runnable r = mOnRegistrationEvent;
         if (r != null) r.run();
     }
 
@@ -173,6 +181,8 @@ class RegistrationListenerAdapter extends IImsRegistrationListener.Stub {
             throws RemoteException {
         fanOut("registrationServiceCapabilityChanged",
                 t -> t.registrationServiceCapabilityChanged(serviceClass, event));
+        Runnable r = mOnRegistrationEvent;
+        if (r != null) r.run();
     }
 
     @Override
@@ -184,6 +194,10 @@ class RegistrationListenerAdapter extends IImsRegistrationListener.Stub {
         synchronized (this) { mEnabledFeatures = enabledFeatures; mDisabledFeatures = disabledFeatures; }
         fanOut("registrationFeatureCapabilityChanged", t -> t.registrationFeatureCapabilityChanged(
                 serviceClass, enabledFeatures, disabledFeatures));
+        // Not trusted on its own. If this said voice is unavailable while the stack is registered,
+        // the framework routes every call to CS, so the feature re-derives it from the UC state.
+        Runnable r2 = mOnRegistrationEvent;
+        if (r2 != null) r2.run();
     }
 
     @Override

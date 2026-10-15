@@ -833,3 +833,43 @@ underneath becomes. Closing that gap means a modern `MmTelFeature` with `getSmsI
 reimplementing what the compat adapter does for calls, plus a route for the OEM app to hand MT
 messages up. Worth knowing before you start, not after: SMS over the circuit-switched path keeps
 working throughout, and only matters once a carrier drops CS fallback.
+
+## VoLTE silently stops, the stack still says registered
+
+Everything calls over circuit-switched, which on a VoLTE-only carrier means nothing connects at all
+(GOTCHAS 58). Voicemail is usually what gets reported, because it is the number people try when a
+call fails, but a plain call fails identically.
+
+The giveaway is a disagreement between the two layers:
+
+    adb shell getprop net.ims.reg              -> 1          the OEM stack is registered
+    logcat: GsmCdmaPhone: useImsForCall=false                the framework thinks there is no VoLTE
+    logcat: GsmCdmaPhone: Trying (non-IMS) CS call
+
+Check the bridge is still bound before suspecting it died, because it usually has not:
+
+    adb shell dumpsys activity services | grep -A6 ImsBridgeService
+
+A `createTime` matching boot and no `restartTime` churn means the bridge has been up the whole time.
+The stack is registered, the bridge is alive, and the framework is still routing to CS, because what
+is stale is the MmTel capability bitmap, and nothing logs an error about it.
+
+The cause is trusting one report. A 7.0-era stack emits `registrationFeatureCapabilityChanged` only
+on a UC state CHANGE, so the bridge has to synthesise the bitmap itself by probing `isConnected()`.
+If it does that once and then skips whenever a bitmap already exists, a bitmap saying voice is
+unavailable latches for the life of the process. Observed on hardware 20 hours into a boot, cleared
+only by `setprop ctl.restart zygote`, which re-binds the bridge and re-probes.
+
+`templates/ims-bridge` now reconciles instead. The probe runs on connect, on either capability
+callback, and on a timer while the session is open, and what the OEM stack reports is checked against
+the UC state rather than taken at face value. Three things matter in that design:
+
+- **Upgrade-only, enforced at the send and not just at the entry gate.** It acts when the stack is
+  registered and the framework has not been told voice is available, never the reverse. A transient
+  UC read must not pull VoLTE out from under a live call, deregistration already has its own
+  callback, and sending a no-voice bitmap would leave the trigger condition true and re-fire itself.
+- **A timer, not just events.** A UC change the stack never emits leaves no event to correct, which
+  is how this survives for hours. The tick is cheap: two field reads once voice is advertised.
+- **The tick must swallow throwables.** `scheduleWithFixedDelay` cancels a throwing task and says
+  nothing, which would quietly reduce the safety net to a single attempt.
+
